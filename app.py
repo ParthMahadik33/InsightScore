@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sqlite3
 
 from flask import (
@@ -42,7 +43,9 @@ def init_db(app: Flask) -> None:
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change-this-secret-key"
+
+# Use environment variables in production, with safe fallbacks for local dev
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-key")
 app.config["DATABASE"] = str(DB_PATH)
 
 # Initialize database
@@ -132,4 +135,8 @@ def logout():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Respect PORT env var (Render sets this), default to 5000 for local dev
+    port = int(os.environ.get("PORT", 5000))
+    # Disable debug mode in production (when SECRET_KEY is set via env var)
+    debug_mode = os.environ.get("SECRET_KEY") is None
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
