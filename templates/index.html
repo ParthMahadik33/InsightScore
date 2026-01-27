@@ -42,6 +42,7 @@
       align-items: center;
       justify-content: center;
       padding: 24px;
+      padding-bottom: 80px; /* Space for bottom nav on mobile */
     }
 
     .page-shell {
@@ -324,6 +325,10 @@
     }
 
     @media (max-width: 768px) {
+      body {
+        padding-bottom: 80px; /* Space for bottom nav */
+      }
+
       .navbar {
         padding: 12px 16px;
       }
@@ -339,6 +344,10 @@
         justify-content: center;
       }
 
+      .navbar-right {
+        display: none; /* Hide top nav links on mobile, use bottom nav */
+      }
+
       .features-grid {
         grid-template-columns: 1fr;
         gap: 24px;
@@ -346,6 +355,51 @@
 
       .nav-btn-primary {
         width: 100%;
+      }
+
+      /* Show bottom navigation */
+      .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        padding: 8px 0;
+        justify-content: space-around;
+        align-items: center;
+      }
+
+      .bottom-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
+        text-decoration: none;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 500;
+        transition: all 0.2s;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .bottom-nav-item.active {
+        color: var(--primary);
+      }
+
+      .bottom-nav-item .icon {
+        font-size: 20px;
+        margin-bottom: 4px;
+      }
+
+      .bottom-nav-item .label {
+        font-size: 11px;
       }
     }
 
@@ -477,6 +531,11 @@
         transform: translateY(0);
       }
     }
+
+    /* Mobile Bottom Navigation Bar */
+    .bottom-nav {
+      display: none;
+    }
   </style>
 </head>
 
@@ -553,6 +612,26 @@
       </div>
     </section>
   </div>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="bottom-nav">
+    <a href="{{ url_for('index') }}" class="bottom-nav-item active">
+      <span class="icon">🏠</span>
+      <span class="label">Home</span>
+    </a>
+    <a href="{{ url_for('signup') }}" class="bottom-nav-item">
+      <span class="icon">📝</span>
+      <span class="label">Signup</span>
+    </a>
+    <a href="{{ url_for('signin') }}" class="bottom-nav-item">
+      <span class="icon">🔐</span>
+      <span class="label">Sign In</span>
+    </a>
+    <a href="#about" class="bottom-nav-item">
+      <span class="icon">ℹ️</span>
+      <span class="label">About</span>
+    </a>
+  </nav>
 </body>
 
 </html>
