@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsightScore – Credit, clearly explained</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --primary: #035fdf;
+      --primary-dark: #0245a3;
+      --accent: #00c896;
+      --bg-soft: #f5f7fb;
+      --text-main: #07111f;
+      --text-muted: #5f6b80;
+      --card-bg: #ffffff;
+      --shadow-soft: 0 18px 45px rgba(15, 35, 52, 0.12);
+      --radius-xl: 28px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background-image: url("{{ url_for('static', filename='assets/bg.png') }}");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .page-shell {
+      width: 100%;
+      max-width: 1200px;
+      position: relative;
+      /* no card: content floats directly on background */
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .bg-ornament {
+      display: none;
+    }
+
+    .overlay-fade {
+      display: none;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 34px;
+      padding: 36px 56px 40px;
+      align-items: center;
+    }
+
+    .hero-left,
+    .hero-right {
+      animation: floatUp 700ms ease-out forwards;
+      opacity: 0;
+    }
+
+    .hero-right {
+      animation-delay: 120ms;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .brand-logo img {
+      height: 38px;
+      width: auto;
+      display: block;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(0, 200, 150, 0.08);
+      color: #087457;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      margin-bottom: 14px;
+    }
+
+    .eyebrow-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0, 200, 150, 0.3);
+    }
+
+    .hero-title {
+      font-family: "Poppins", system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 2.6rem;
+      line-height: 1.1;
+      margin-bottom: 12px;
+      color: #02101f;
+    }
+
+    .hero-title span.highlight {
+      color: var(--primary);
+    }
+
+    .hero-subtitle {
+      font-size: 1.02rem;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+    }
+
+    .bullet-list {
+      list-style: none;
+      margin-bottom: 26px;
+    }
+
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.96rem;
+      color: var(--text-main);
+      margin-bottom: 10px;
+    }
+
+    .bullet-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #e4f7ef;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0a915f;
+      font-size: 0.7rem;
+      box-shadow: 0 0 0 2px rgba(10, 145, 95, 0.12);
+    }
+
+    .hero-cta-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 13px 26px;
+      border-radius: 999px;
+      background-image: linear-gradient(135deg, var(--primary) 0, #0481ff 50%, #00a2ff 100%);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.98rem;
+      letter-spacing: 0.03em;
+      text-transform: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 14px 28px rgba(3, 95, 223, 0.52);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+      box-shadow: 0 20px 40px rgba(3, 95, 223, 0.65);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow: 0 10px 26px rgba(3, 95, 223, 0.5);
+    }
+
+    .btn-pill-caption {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(11, 123, 84, 0.2);
+      background: rgba(228, 247, 239, 0.9);
+      font-size: 0.78rem;
+      color: #16563f;
+      backdrop-filter: blur(10px);
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #16c47f;
+      box-shadow: 0 0 0 3px rgba(22, 196, 127, 0.35);
+    }
+
+    .hero-right {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding-left: 16px;
+    }
+
+    .device-shell {
+      position: relative;
+      width: min(400px, 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+    }
+
+    .device-inner {
+      width: 100%;
+      background: transparent;
+      border-radius: 0;
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .device-inner img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .badge-floating {
+      position: absolute;
+      top: 8%;
+      right: -14px;
+      transform: translateY(-20%);
+      background: #ffffff;
+      border-radius: 999px;
+      padding: 7px 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: 0 18px 38px rgba(8, 42, 79, 0.3);
+      font-size: 0.78rem;
+      color: #1c384f;
+      white-space: nowrap;
+    }
+
+    .badge-lock {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e6fbf3;
+      color: #16a06d;
+      font-size: 0.8rem;
+    }
+
+    .badge-label {
+      font-weight: 500;
+    }
+
+    .badge-pill {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(3, 95, 223, 0.07);
+      color: #035fdf;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .glow-orb {
+      display: none;
+    }
+
+    @media (max-width: 960px) {
+      .hero {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 32px 22px 30px;
+      }
+
+      .hero-right {
+        order: -1;
+      }
+
+      .page-shell {
+        border-radius: 24px;
+      }
+
+      .badge-floating {
+        right: 12px;
+        top: 10px;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 12px;
+      }
+
+      .hero-title {
+        font-size: 2.05rem;
+      }
+
+      .hero {
+        padding: 20px 18px 22px;
+      }
+
+      .hero-cta-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .device-shell {
+        width: min(300px, 100%);
+      }
+    }
+
+    .navbar {
+      width: 100%;
+      padding: 14px 40px 4px;
+      position: relative;
+      z-index: 10;
+      animation: floatDown 600ms ease-out forwards;
+      opacity: 0;
+    }
+
+    .navbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.96);
+      border-radius: 999px;
+      padding: 8px 18px 8px 12px;
+      box-shadow: 0 18px 40px rgba(3, 40, 84, 0.2);
+      backdrop-filter: blur(14px);
+    }
+
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.9rem;
+    }
+
+    .nav-link {
+      color: #1b3246;
+      text-decoration: none;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 999px;
+      transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+    }
+
+    .nav-link:hover {
+      background: rgba(3, 95, 223, 0.07);
+      color: #035fdf;
+      transform: translateY(-1px);
+    }
+
+    .nav-btn-primary {
+      text-decoration: none;
+      padding: 8px 18px;
+      border-radius: 999px;
+      background-image: linear-gradient(135deg, var(--primary) 0, #0481ff 50%, #00a2ff 100%);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.88rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 10px 26px rgba(3, 95, 223, 0.52);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+    }
+
+    .nav-btn-primary:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+      box-shadow: 0 14px 34px rgba(3, 95, 223, 0.65);
+    }
+
+    .nav-btn-primary:active {
+      transform: translateY(0);
+      box-shadow: 0 8px 20px rgba(3, 95, 223, 0.52);
+    }
+
+    @keyframes floatUp {
+      from {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes floatDown {
+      from {
+        opacity: 0;
+        transform: translateY(-18px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page-shell">
+    <header class="navbar">
+      <div class="navbar-inner">
+        <div class="navbar-left">
+          <div class="brand-row">
+            <div class="brand-logo">
+              <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="InsightScore logo">
+            </div>
+          </div>
+        </div>
+        <nav class="navbar-right">
+          <a href="#signup" class="nav-link">Signup</a>
+          <a href="#about" class="nav-link">About us</a>
+          <a href="#check" class="nav-btn-primary">Check InsightScore</a>
+        </nav>
+      </div>
+    </header>
+
+    <section class="hero" id="check">
+      <div class="hero-left">
+
+        <div class="eyebrow">
+          <span class="eyebrow-dot"></span>
+          <span>Secure • Private • Built for you</span>
+        </div>
+
+        <h1 class="hero-title">
+          Get your <span class="highlight">InsightScore</span> for FREE
+        </h1>
+        <p class="hero-subtitle">Credit, clearly explained.</p>
+
+        <ul class="bullet-list" aria-label="InsightScore benefits">
+          <li class="bullet-item">
+            <span class="bullet-icon">✔</span>
+            <span>No impact on your credit score</span>
+          </li>
+          <li class="bullet-item">
+            <span class="bullet-icon">✔</span>
+            <span>Built for real financial behavior</span>
+          </li>
+          <li class="bullet-item">
+            <span class="bullet-icon">✔</span>
+            <span>100% secure &amp; transparent</span>
+          </li>
+        </ul>
+
+        <div class="hero-cta-row">
+          <button class="btn-primary" type="button">
+            Check InsightScore
+          </button>
+          <div class="btn-pill-caption">
+            <span class="pill-dot"></span>
+            <span>Instant check • No credit impact</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="device-shell" aria-hidden="true">
+          <div class="device-inner">
+            <img src="{{ url_for('static', filename='assets/Phone2.png') }}" alt="InsightScore phone preview">
+          </div>
+          <div class="badge-floating">
+            <span class="badge-lock">🔒</span>
+            <span class="badge-label">Secure &amp; Private</span>
+            <span class="badge-pill">No credit impact</span>
+          </div>
+        </div>
+        <div class="glow-orb"></div>
+      </div>
+    </section>
+  </div>
+</body>
+
+</html>
+
+
