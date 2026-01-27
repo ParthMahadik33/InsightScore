@@ -76,6 +76,24 @@ Already have an account?
   </div>
 
   <div class="field-group">
+    <label for="phone">Phone Number</label>
+    <div class="field-input">
+      <input
+        type="tel"
+        id="phone"
+        name="phone"
+        placeholder="9930235462"
+        required
+        pattern="[0-9]{10}"
+        autocomplete="tel"
+      />
+    </div>
+    <div class="field-helper">
+      Enter your 10-digit phone number (for WhatsApp notifications).
+    </div>
+  </div>
+
+  <div class="field-group">
     <label for="password">Password</label>
     <div class="field-input">
       <input

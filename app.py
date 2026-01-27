@@ -23,6 +23,8 @@ from werkzeug.utils import secure_filename
 import pdfplumber
 import pandas as pd
 import google.generativeai as genai
+import requests
+from datetime import datetime, timedelta
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "auth.db"
@@ -37,6 +39,11 @@ ALLOWED_EXTENSIONS = {'pdf', 'csv'}
 
 # Loan types
 LOAN_TYPES = ['personal', 'home', 'education', 'business', 'vehicle', 'gold', 'other']
+
+# UltraMSG WhatsApp API Configuration
+ULTRAMSG_API_URL = "https://api.ultramsg.com/instance160178/"
+ULTRAMSG_TOKEN = "glqz6gz9yr7txkik"
+ULTRAMSG_INSTANCE_ID = "instance160178"
 
 def get_db(app: Flask) -> sqlite3.Connection:
     conn = sqlite3.connect(app.config["DATABASE"])
@@ -59,6 +66,73 @@ def calculate_doc_hash(files_dict):
     """Calculate hash of uploaded documents for caching"""
     combined = json.dumps(files_dict, sort_keys=True)
     return hashlib.sha256(combined.encode()).hexdigest()
+
+def send_whatsapp_message(phone_number, message):
+    """Send WhatsApp message via UltraMSG API"""
+    try:
+        # Format phone number (remove +, spaces, etc.)
+        phone = phone_number.replace("+", "").replace(" ", "").replace("-", "")
+        # Ensure it starts with country code (assuming India +91)
+        if not phone.startswith("91") and len(phone) == 10:
+            phone = "91" + phone
+        
+        # UltraMSG API endpoint format: https://api.ultramsg.com/{instance}/messages/chat
+        url = f"https://api.ultramsg.com/{ULTRAMSG_INSTANCE_ID}/messages/chat"
+        payload = {
+            "token": ULTRAMSG_TOKEN,
+            "to": phone,
+            "body": message
+        }
+        
+        response = requests.post(url, data=payload, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("sent") == "true" or result.get("success") == True:
+                return True
+            else:
+                print(f"WhatsApp API Response: {result}")
+                return False
+        else:
+            print(f"WhatsApp API Error: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"Error sending WhatsApp message: {str(e)}")
+        return False
+
+def check_monthly_reminder(user_id, conn):
+    """Check if user needs monthly reminder to check score"""
+    try:
+        # Get user's phone number
+        cur = conn.execute("SELECT phone FROM users WHERE id = ?", (user_id,))
+        user = cur.fetchone()
+        if not user or not user["phone"]:
+            return False
+        
+        # Get last quick score
+        cur = conn.execute(
+            "SELECT created_at FROM quick_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+            (user_id,)
+        )
+        last_score = cur.fetchone()
+        
+        # If no score exists or last score is more than 30 days old, send reminder
+        should_remind = False
+        if not last_score:
+            should_remind = True
+        else:
+            last_date = datetime.fromisoformat(last_score["created_at"].replace("Z", "+00:00") if "Z" in last_score["created_at"] else last_score["created_at"])
+            days_since = (datetime.now() - last_date.replace(tzinfo=None)).days
+            if days_since >= 30:
+                should_remind = True
+        
+        if should_remind:
+            message = "🔔 InsightScore Reminder: It's been a while since you checked your credit score. Generate your monthly Quick InsightScore to track your financial health! Visit your dashboard to get started."
+            return send_whatsapp_message(user["phone"], message)
+        
+        return False
+    except Exception as e:
+        print(f"Error checking monthly reminder: {str(e)}")
+        return False
 
 def init_db(app: Flask) -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +177,16 @@ def init_db(app: Flask) -> None:
                 # Set default role for existing users
                 conn.execute("UPDATE users SET role = 'user' WHERE role IS NULL")
                 conn.commit()
+            
+            # Add phone column if it doesn't exist
+            if 'phone' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+                conn.commit()
+                
+                # Update existing users' phone numbers
+                conn.execute("UPDATE users SET phone = '9930235462' WHERE LOWER(username) LIKE '%parth%mahadik%' OR LOWER(username) LIKE '%mahadik%parth%'")
+                conn.execute("UPDATE users SET phone = '9076370678' WHERE LOWER(username) LIKE '%vini%sawant%' OR LOWER(username) LIKE '%sawant%vini%'")
+                conn.commit()
         else:
             # Create users table with all columns
             conn.execute(
@@ -114,6 +198,7 @@ def init_db(app: Flask) -> None:
                     email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
                     role TEXT DEFAULT 'user',
+                    phone TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -694,12 +779,17 @@ def signup():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
+        phone = request.form.get("phone", "").strip()
         role = request.form.get("role", "user")  # 'user' or 'lender'
         org_name = request.form.get("org_name", "").strip() if role == "lender" else None
         loan_types = request.form.getlist("loan_types") if role == "lender" else None
 
         if not username or not email or not password:
             flash("All fields are required.", "error")
+            return redirect(url_for("signup"))
+        
+        if role == "user" and not phone:
+            flash("Phone number is required for WhatsApp notifications.", "error")
             return redirect(url_for("signup"))
 
         if password != confirm_password:
@@ -740,11 +830,13 @@ def signup():
                     columns = [row[1] for row in cur.fetchall()]
                     if 'unique_user_id' not in columns:
                         conn.execute("ALTER TABLE users ADD COLUMN unique_user_id TEXT")
+                    if 'phone' not in columns:
+                        conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
                     
                     conn.execute(
-                        """INSERT INTO users (unique_user_id, username, email, password_hash, role)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (unique_user_id, username, email, hashed, role),
+                        """INSERT INTO users (unique_user_id, username, email, password_hash, role, phone)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (unique_user_id, username, email, hashed, role, phone),
                     )
                     flash(f"Account created successfully! Your User ID: {unique_user_id}", "success")
             return redirect(url_for("signin"))
@@ -763,10 +855,16 @@ def signup():
                         if check_cur.fetchone() is None:
                             break
                         unique_user_id = generate_unique_user_id()
+                    # Check if phone column exists
+                    cur = conn.execute("PRAGMA table_info(users)")
+                    columns = [row[1] for row in cur.fetchall()]
+                    if 'phone' not in columns:
+                        conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+                    
                     conn.execute(
-                        """INSERT INTO users (unique_user_id, username, email, password_hash, role)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (unique_user_id, username, email, hashed, role),
+                        """INSERT INTO users (unique_user_id, username, email, password_hash, role, phone)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (unique_user_id, username, email, hashed, role, phone),
                     )
                     flash(f"Account created successfully! Your User ID: {unique_user_id}", "success")
                     return redirect(url_for("signin"))
@@ -880,6 +978,9 @@ def dashboard():
         )
         unread_result = cur.fetchone()
         unread_count = unread_result["count"] if unread_result else 0
+        
+        # Check and send monthly reminder if needed
+        check_monthly_reminder(session["user_id"], conn)
     
     return render_template("dashboard.html", 
                          username=session.get("username"),
@@ -1313,37 +1414,47 @@ def lender_search_user():
                     flash("User not found.", "error")
                     return redirect(url_for("lender_search_user"))
                 
-                # Get verified score
-                cur = conn.execute(
-                    "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
-                    (user["id"],)
+            # Get verified score
+            cur = conn.execute(
+                "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (user["id"],)
+            )
+            verified_score = cur.fetchone()
+            
+            if not verified_score:
+                # Send notification to user
+                lender_name = session.get("username", "A lender")
+                conn.execute(
+                    """INSERT INTO notifications (user_id, lender_id, notification_type, message)
+                       VALUES (?, ?, ?, ?)""",
+                    (user["id"], session["lender_id"], "score_request",
+                     f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.")
                 )
-                verified_score = cur.fetchone()
+                conn.commit()
                 
-                if not verified_score:
-                    # Send notification to user
-                    lender_name = session.get("username", "A lender")
-                    conn.execute(
-                        """INSERT INTO notifications (user_id, lender_id, notification_type, message)
-                           VALUES (?, ?, ?, ?)""",
-                        (user["id"], session["lender_id"], "score_request",
-                         f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.")
-                    )
-                    conn.commit()
-                    
-                    # Get lender info for display
-                    cur = conn.execute(
-                        "SELECT name, org_name FROM lenders WHERE id = ?",
-                        (session["lender_id"],)
-                    )
+                # Send WhatsApp notification
+                cur = conn.execute("SELECT phone FROM users WHERE id = ?", (user["id"],))
+                user_phone = cur.fetchone()
+                if user_phone and user_phone["phone"]:
+                    cur = conn.execute("SELECT name, org_name FROM lenders WHERE id = ?", (session["lender_id"],))
                     lender_info = cur.fetchone()
-                    
-                    return render_template("lender_user_no_score.html",
-                                         user=user,
-                                         lender_info=lender_info,
-                                         loan_type=loan_type,
-                                         request_id=request_id,
-                                         loan_types=LOAN_TYPES)
+                    lender_org = lender_info["org_name"] if lender_info and lender_info["org_name"] else lender_name
+                    whatsapp_message = f"🔔 InsightScore Alert: {lender_org} tried to check your verified credit score, but you haven't generated one yet. Please upload your official documents (Bank statement, UPI transactions, CIBIL report) to generate your verified score. Visit your dashboard to upload documents now!"
+                    send_whatsapp_message(user_phone["phone"], whatsapp_message)
+                
+                # Get lender info for display
+                cur = conn.execute(
+                    "SELECT name, org_name FROM lenders WHERE id = ?",
+                    (session["lender_id"],)
+                )
+                lender_info = cur.fetchone()
+                
+                return render_template("lender_user_no_score.html",
+                                     user=user,
+                                     lender_info=lender_info,
+                                     loan_type=loan_type,
+                                     request_id=request_id,
+                                     loan_types=LOAN_TYPES)
                 
                 # Get loan request if request_id provided
                 loan_request = None
