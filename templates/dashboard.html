@@ -319,9 +319,7 @@
                         {% endif %}
                     </div>
                     {% if notification.is_read == 0 %}
-                    <form method="post" action="{{ url_for('mark_notification_read', notification_id=notification.id) }}" style="display: inline;">
-                        <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Mark Read</button>
-                    </form>
+                    <button type="button" class="btn btn-secondary mark-read-btn" data-notification-id="{{ notification.id }}" style="padding: 6px 12px; font-size: 12px;">Mark Read</button>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -388,5 +386,48 @@
         });
     </script>
     {% endif %}
+
+    <script>
+        // Handle mark as read button clicks
+        document.querySelectorAll('.mark-read-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const notificationId = this.getAttribute('data-notification-id');
+                const button = this;
+                const notificationItem = button.closest('.loan-request-item');
+                
+                // Make AJAX request
+                fetch(`/notifications/mark-read/${notificationId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the button
+                        button.remove();
+                        // Update the notification item style to mark as read
+                        notificationItem.style.background = 'var(--bg-soft)';
+                        notificationItem.style.borderLeft = 'none';
+                        // Update unread count if displayed
+                        const unreadBadge = document.querySelector('h3 span');
+                        if (unreadBadge) {
+                            const currentCount = parseInt(unreadBadge.textContent);
+                            if (currentCount > 1) {
+                                unreadBadge.textContent = `${currentCount - 1} new`;
+                            } else {
+                                unreadBadge.remove();
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to mark notification as read. Please refresh the page.');
+                });
+            });
+        });
+    </script>
 </body>
 </html>
