@@ -13,6 +13,16 @@ New here?
 {% block form %}
 <form method="post" action="{{ url_for('signin') }}">
   <div class="field-group">
+    <label for="role">Account Type</label>
+    <div class="field-input">
+      <select id="role" name="role" required style="width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid rgba(148, 163, 184, 0.8); background: rgba(255, 255, 255, 0.7); font-size: 13px;">
+        <option value="user">Regular User</option>
+        <option value="lender">Money Lender</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="field-group">
     <label for="email">Email</label>
     <div class="field-input">
       <input

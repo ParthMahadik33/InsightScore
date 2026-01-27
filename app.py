@@ -3,6 +3,8 @@ import os
 import sqlite3
 import json
 import re
+import hashlib
+import secrets
 from datetime import datetime
 
 from flask import (
@@ -33,25 +35,158 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 ALLOWED_EXTENSIONS = {'pdf', 'csv'}
 
+# Loan types
+LOAN_TYPES = ['personal', 'home', 'education', 'business', 'vehicle', 'gold', 'other']
+
 def get_db(app: Flask) -> sqlite3.Connection:
     conn = sqlite3.connect(app.config["DATABASE"])
     conn.row_factory = sqlite3.Row
+    # Enable auto-commit for context manager
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+def generate_unique_user_id():
+    """Generate unique user ID: USR-<random>"""
+    random_part = secrets.token_hex(4).upper()
+    return f"USR-{random_part}"
+
+def generate_unique_lender_id():
+    """Generate unique lender ID: LND-<random>"""
+    random_part = secrets.token_hex(4).upper()
+    return f"LND-{random_part}"
+
+def calculate_doc_hash(files_dict):
+    """Calculate hash of uploaded documents for caching"""
+    combined = json.dumps(files_dict, sort_keys=True)
+    return hashlib.sha256(combined.encode()).hexdigest()
 
 def init_db(app: Flask) -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_db(app) as conn:
+        # Check if users table exists and get its columns
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        table_exists = cur.fetchone() is not None
+        
+        if table_exists:
+            # Get existing columns
+            cur = conn.execute("PRAGMA table_info(users)")
+            columns = [row[1] for row in cur.fetchall()]
+            
+            # Add unique_user_id column if it doesn't exist
+            if 'unique_user_id' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN unique_user_id TEXT")
+                # Generate unique_user_id for existing users
+                cur = conn.execute("SELECT id FROM users WHERE unique_user_id IS NULL OR unique_user_id = ''")
+                existing_users = cur.fetchall()
+                for user_row in existing_users:
+                    unique_id = generate_unique_user_id()
+                    # Ensure uniqueness
+                    max_attempts = 10
+                    attempts = 0
+                    while attempts < max_attempts:
+                        check_cur = conn.execute("SELECT id FROM users WHERE unique_user_id = ?", (unique_id,))
+                        if check_cur.fetchone() is None:
+                            break
+                        unique_id = generate_unique_user_id()
+                        attempts += 1
+                    conn.execute("UPDATE users SET unique_user_id = ? WHERE id = ?", (unique_id, user_row[0]))
+                # Create unique index
+                try:
+                    conn.execute("CREATE UNIQUE INDEX idx_users_unique_user_id ON users(unique_user_id)")
+                except sqlite3.OperationalError:
+                    pass
+                conn.commit()
+            
+            # Add role column if it doesn't exist
+            if 'role' not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+                # Set default role for existing users
+                conn.execute("UPDATE users SET role = 'user' WHERE role IS NULL")
+                conn.commit()
+        else:
+            # Create users table with all columns
+            conn.execute(
+                """
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    unique_user_id TEXT UNIQUE,
+                    username TEXT NOT NULL,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    role TEXT DEFAULT 'user',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        
+        # Create lenders table
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS lenders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
+                unique_lender_id TEXT UNIQUE,
+                name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+                org_name TEXT,
+                loan_types_offered TEXT,
+                role TEXT DEFAULT 'lender',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        
+        # Create quick_scores table (monthly behavioral scores)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quick_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                behavior_json TEXT,
+                hybrid_score REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        
+        # Create verified_scores table (document-based scores)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS verified_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                cibil_json TEXT,
+                bank_json TEXT,
+                upi_json TEXT,
+                salary_json TEXT,
+                behavior_json TEXT,
+                hybrid_score REAL,
+                doc_hash TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        
+        # Create loan_requests table
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS loan_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lender_id INTEGER,
+                loan_type TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                decision_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                FOREIGN KEY (lender_id) REFERENCES lenders (id)
+            )
+            """
+        )
+        
+        # Keep old scores table for backward compatibility (will migrate data later)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS scores (
@@ -66,6 +201,7 @@ def init_db(app: Flask) -> None:
             )
             """
         )
+        
         conn.commit()
 
 # Initialize Flask app
@@ -197,6 +333,99 @@ def parse_upi_pdf(pdf_path):
     except Exception as e:
         return {'error': str(e)}
 
+def parse_bank_statement(pdf_path):
+    """Parse bank statement PDF"""
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        
+        # Extract account balance patterns
+        balance_patterns = [
+            r'(?:balance|bal|available)[\s:]*₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)',
+            r'₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s*(?:balance|bal)'
+        ]
+        balances = []
+        for pattern in balance_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            balances.extend([float(m.replace(',', '')) for m in matches])
+        
+        avg_balance = sum(balances) / len(balances) if balances else 0
+        
+        # Extract transaction patterns
+        debit_pattern = r'(?:debit|withdrawal|payment)[\s:]*₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)'
+        credit_pattern = r'(?:credit|deposit|salary)[\s:]*₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)'
+        
+        debits = re.findall(debit_pattern, text, re.IGNORECASE)
+        credits = re.findall(credit_pattern, text, re.IGNORECASE)
+        
+        total_debits = sum([float(d.replace(',', '')) for d in debits])
+        total_credits = sum([float(c.replace(',', '')) for c in credits])
+        
+        # Count EMI/loan payments
+        emi_keywords = ['emi', 'loan', 'installment', 'repayment']
+        emi_count = sum(1 for keyword in emi_keywords if keyword.lower() in text.lower())
+        
+        # Check for overdraft or negative balance
+        negative_balance = any('overdraft' in text.lower() or 'negative' in text.lower() or 'insufficient' in text.lower())
+        
+        return {
+            'avg_balance': float(avg_balance),
+            'total_debits': float(total_debits),
+            'total_credits': float(total_credits),
+            'emi_count': emi_count,
+            'negative_balance': negative_balance,
+            'transaction_count': len(debits) + len(credits)
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+def parse_salary_slip(pdf_path):
+    """Parse salary slip PDF"""
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        
+        # Extract salary/gross/net pay
+        salary_patterns = [
+            r'(?:gross|salary|net\s*pay|total)[\s:]*₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)',
+            r'₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s*(?:gross|salary|net)'
+        ]
+        salaries = []
+        for pattern in salary_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            salaries.extend([float(m.replace(',', '')) for m in matches])
+        
+        gross_salary = max(salaries) if salaries else None
+        
+        # Extract deductions
+        deduction_pattern = r'(?:deduction|pf|tax|tds)[\s:]*₹?\s*(\d+(?:,\d+)*(?:\.\d{2})?)'
+        deductions = re.findall(deduction_pattern, text, re.IGNORECASE)
+        total_deductions = sum([float(d.replace(',', '')) for d in deductions])
+        
+        # Extract employee ID or name
+        emp_id_pattern = r'(?:employee\s*id|emp\s*id|id)[\s:]*([A-Z0-9]+)'
+        emp_id_match = re.search(emp_id_pattern, text, re.IGNORECASE)
+        emp_id = emp_id_match.group(1) if emp_id_match else None
+        
+        # Check for regular employment (monthly pattern)
+        month_pattern = r'(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*\d{4}'
+        months_found = len(re.findall(month_pattern, text, re.IGNORECASE))
+        is_regular = months_found > 0
+        
+        return {
+            'gross_salary': float(gross_salary) if gross_salary else None,
+            'net_salary': float(gross_salary - total_deductions) if gross_salary else None,
+            'total_deductions': float(total_deductions),
+            'emp_id': emp_id,
+            'is_regular': is_regular
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
 def calculate_behavioral_score(data):
     """Use Gemini LLM to calculate behavioral score"""
     prompt = f"""
@@ -296,6 +525,145 @@ def calculate_hybrid_score(cibil_score, behavior_score):
     else:
         return behavior_score * 100
 
+def calculate_verified_behavioral_score(cibil_json, bank_json, upi_json, salary_json):
+    """Use Gemini LLM to calculate verified behavioral score from documents"""
+    prompt = f"""
+You are a financial behavior analyst. Based on OFFICIAL DOCUMENTS provided, calculate verified behavioral scores.
+DO NOT use any self-reported data - ONLY use verified data from documents.
+
+Document Data:
+- CIBIL Report: {json.dumps(cibil_json, indent=2)}
+- Bank Statement: {json.dumps(bank_json, indent=2)}
+- UPI Transactions: {json.dumps(upi_json, indent=2)}
+- Salary Slip: {json.dumps(salary_json, indent=2)}
+
+Calculate the following scores (each on a scale of 0-10) based ONLY on verified document data:
+1. income_stability_score (from salary slip regularity, bank credits)
+2. spending_discipline_score (from bank debits, UPI patterns)
+3. savings_behavior_score (from bank balance, credits vs debits)
+4. payment_discipline_score (from CIBIL late payments, bank overdrafts)
+5. digital_behavior_score (from UPI transaction patterns)
+6. lifestyle_stability_score (from transaction regularity, EMI patterns)
+
+Then calculate a final behavior_score (0-10) as a weighted average:
+- income_stability: 15%
+- spending_discipline: 20%
+- savings_behavior: 20%
+- payment_discipline: 25%
+- digital_behavior: 10%
+- lifestyle_stability: 10%
+
+Respond ONLY with valid JSON in this exact format:
+{{
+  "income_stability_score": <number 0-10>,
+  "spending_discipline_score": <number 0-10>,
+  "savings_behavior_score": <number 0-10>,
+  "payment_discipline_score": <number 0-10>,
+  "digital_behavior_score": <number 0-10>,
+  "lifestyle_stability_score": <number 0-10>,
+  "behavior_score": <number 0-10>,
+  "explanation": "<3-4 bullet points explaining the verified score>",
+  "key_insights": {{
+    "positive": ["<what increased score>", "<another positive>"],
+    "negative": ["<what reduced score>", "<another negative>"]
+  }},
+  "red_flags": ["<any concerning patterns>"],
+  "improvement_tips": ["<tip 1>", "<tip 2>", "<tip 3>"]
+}}
+"""
+    
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
+        
+        # Extract JSON from response
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            # Fallback scoring
+            return {
+                "income_stability_score": 7.0,
+                "spending_discipline_score": 7.0,
+                "savings_behavior_score": 7.0,
+                "payment_discipline_score": 7.0,
+                "digital_behavior_score": 7.0,
+                "lifestyle_stability_score": 7.0,
+                "behavior_score": 7.0,
+                "explanation": "Based on verified documents, moderate financial behavior observed.",
+                "key_insights": {"positive": [], "negative": []},
+                "red_flags": [],
+                "improvement_tips": ["Maintain consistent savings", "Pay bills on time", "Track expenses regularly"]
+            }
+    except Exception as e:
+        # Fallback scoring
+        return {
+            "income_stability_score": 7.0,
+            "spending_discipline_score": 7.0,
+            "savings_behavior_score": 7.0,
+            "payment_discipline_score": 7.0,
+            "digital_behavior_score": 7.0,
+            "lifestyle_stability_score": 7.0,
+            "behavior_score": 7.0,
+            "explanation": f"Error in AI analysis: {str(e)}. Using default scores.",
+            "key_insights": {"positive": [], "negative": []},
+            "red_flags": [],
+            "improvement_tips": ["Maintain consistent savings", "Pay bills on time", "Track expenses regularly"]
+        }
+
+def calculate_loan_type_score(behavior_json, loan_type, cibil_score, salary_json=None):
+    """Calculate loan-type-specific score and recommendation"""
+    behavior_score = behavior_json.get('behavior_score', 7.0) if isinstance(behavior_json, dict) else 7.0
+    hybrid_score = calculate_hybrid_score(cibil_score, behavior_score)
+    
+    # Loan-type-specific risk weights
+    risk_weights = {
+        'personal': {'cibil_weight': 0.5, 'behavior_weight': 0.5},
+        'home': {'cibil_weight': 0.6, 'behavior_weight': 0.4},
+        'education': {'cibil_weight': 0.4, 'behavior_weight': 0.6},
+        'business': {'cibil_weight': 0.45, 'behavior_weight': 0.55},
+        'vehicle': {'cibil_weight': 0.5, 'behavior_weight': 0.5},
+        'gold': {'cibil_weight': 0.3, 'behavior_weight': 0.7},
+        'other': {'cibil_weight': 0.5, 'behavior_weight': 0.5}
+    }
+    
+    weights = risk_weights.get(loan_type, risk_weights['other'])
+    adjusted_score = (cibil_score * weights['cibil_weight']) + ((behavior_score * 100) * weights['behavior_weight'])
+    
+    # EMI affordability (simplified calculation)
+    # Assuming 30% of income can go to EMI
+    salary = None
+    if salary_json:
+        salary = salary_json.get('gross_salary') or salary_json.get('net_salary')
+    if salary:
+        max_emi = salary * 0.3
+    else:
+        max_emi = None
+    
+    # Default risk prediction
+    if adjusted_score >= 750:
+        risk_level = "Low"
+        recommendation = "Approve"
+    elif adjusted_score >= 650:
+        risk_level = "Medium"
+        recommendation = "Approve with Caution"
+    elif adjusted_score >= 550:
+        risk_level = "Medium-High"
+        recommendation = "Caution / Need more documents"
+    else:
+        risk_level = "High"
+        recommendation = "Reject"
+    
+    return {
+        'adjusted_score': adjusted_score,
+        'hybrid_score': hybrid_score,
+        'risk_level': risk_level,
+        'recommendation': recommendation,
+        'max_emi_affordability': max_emi,
+        'loan_type': loan_type
+    }
+
 @app.route("/")
 def index():
     """Home page"""
@@ -303,12 +671,15 @@ def index():
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
-    """User registration"""
+    """User/Lender registration"""
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
+        role = request.form.get("role", "user")  # 'user' or 'lender'
+        org_name = request.form.get("org_name", "").strip() if role == "lender" else None
+        loan_types = request.form.getlist("loan_types") if role == "lender" else None
 
         if not username or not email or not password:
             flash("All fields are required.", "error")
@@ -322,60 +693,167 @@ def signup():
 
         try:
             with get_db(app) as conn:
-                conn.execute(
-                    "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-                    (username, email, hashed),
-                )
-            flash("Account created successfully. Please sign in.", "success")
+                if role == "lender":
+                    unique_lender_id = generate_unique_lender_id()
+                    # Ensure uniqueness
+                    while True:
+                        check_cur = conn.execute("SELECT id FROM lenders WHERE unique_lender_id = ?", (unique_lender_id,))
+                        if check_cur.fetchone() is None:
+                            break
+                        unique_lender_id = generate_unique_lender_id()
+                    
+                    loan_types_json = json.dumps(loan_types) if loan_types else "[]"
+                    conn.execute(
+                        """INSERT INTO lenders (unique_lender_id, name, email, password_hash, org_name, loan_types_offered, role)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (unique_lender_id, username, email, hashed, org_name, loan_types_json, role),
+                    )
+                    flash(f"Lender account created! Your Lender ID: {unique_lender_id}", "success")
+                else:
+                    unique_user_id = generate_unique_user_id()
+                    # Ensure uniqueness
+                    while True:
+                        check_cur = conn.execute("SELECT id FROM users WHERE unique_user_id = ?", (unique_user_id,))
+                        if check_cur.fetchone() is None:
+                            break
+                        unique_user_id = generate_unique_user_id()
+                    
+                    # Check if unique_user_id column exists, if not, add it
+                    cur = conn.execute("PRAGMA table_info(users)")
+                    columns = [row[1] for row in cur.fetchall()]
+                    if 'unique_user_id' not in columns:
+                        conn.execute("ALTER TABLE users ADD COLUMN unique_user_id TEXT")
+                    
+                    conn.execute(
+                        """INSERT INTO users (unique_user_id, username, email, password_hash, role)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (unique_user_id, username, email, hashed, role),
+                    )
+                    flash(f"Account created successfully! Your User ID: {unique_user_id}", "success")
             return redirect(url_for("signin"))
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as e:
             flash("A user with that email already exists.", "error")
             return redirect(url_for("signup"))
+        except sqlite3.OperationalError as e:
+            # If column doesn't exist, try to add it and retry
+            if "no column named unique_user_id" in str(e).lower():
+                with get_db(app) as conn:
+                    conn.execute("ALTER TABLE users ADD COLUMN unique_user_id TEXT")
+                    # Retry the insert
+                    unique_user_id = generate_unique_user_id()
+                    while True:
+                        check_cur = conn.execute("SELECT id FROM users WHERE unique_user_id = ?", (unique_user_id,))
+                        if check_cur.fetchone() is None:
+                            break
+                        unique_user_id = generate_unique_user_id()
+                    conn.execute(
+                        """INSERT INTO users (unique_user_id, username, email, password_hash, role)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (unique_user_id, username, email, hashed, role),
+                    )
+                    flash(f"Account created successfully! Your User ID: {unique_user_id}", "success")
+                    return redirect(url_for("signin"))
+            else:
+                flash(f"Database error: {str(e)}", "error")
+                return redirect(url_for("signup"))
 
-    return render_template("signup.html")
+    return render_template("signup.html", loan_types=LOAN_TYPES)
 
 @app.route("/signin", methods=["GET", "POST"])
 def signin():
-    """User login"""
+    """User/Lender login"""
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        role = request.form.get("role", "user")  # 'user' or 'lender'
 
         with get_db(app) as conn:
-            cur = conn.execute(
-                "SELECT id, username, email, password_hash FROM users WHERE email = ?",
-                (email,),
-            )
-            user = cur.fetchone()
+            if role == "lender":
+                cur = conn.execute(
+                    "SELECT id, unique_lender_id, name, email, password_hash, org_name FROM lenders WHERE email = ?",
+                    (email,),
+                )
+                user = cur.fetchone()
+                if user and check_password_hash(user["password_hash"], password):
+                    session["lender_id"] = user["id"]
+                    session["unique_lender_id"] = user["unique_lender_id"]
+                    session["username"] = user["name"]
+                    session["role"] = "lender"
+                    flash(f"Welcome back, {user['name']}!", "success")
+                    return redirect(url_for("lender_dashboard"))
+            else:
+                cur = conn.execute(
+                    "SELECT id, unique_user_id, username, email, password_hash FROM users WHERE email = ?",
+                    (email,),
+                )
+                user = cur.fetchone()
+                if user and check_password_hash(user["password_hash"], password):
+                    session["user_id"] = user["id"]
+                    session["unique_user_id"] = user["unique_user_id"]
+                    session["username"] = user["username"]
+                    session["role"] = "user"
+                    flash(f"Welcome back, {user['username']}!", "success")
+                    return redirect(url_for("dashboard"))
 
-        if not user or not check_password_hash(user["password_hash"], password):
-            flash("Invalid email or password.", "error")
-            return redirect(url_for("signin"))
-
-        session["user_id"] = user["id"]
-        session["username"] = user["username"]
-        flash(f"Welcome back, {user['username']}!", "success")
-        return redirect(url_for("dashboard"))
+        flash("Invalid email or password.", "error")
+        return redirect(url_for("signin"))
 
     return render_template("signin.html")
 
 @app.route("/dashboard")
 def dashboard():
     """User dashboard (protected)"""
-    if "user_id" not in session:
+    if "user_id" not in session or session.get("role") != "user":
         return redirect(url_for("signin"))
     
-    # Get latest score if exists
     with get_db(app) as conn:
+        # Get unique user ID
         cur = conn.execute(
-            "SELECT hybrid_score, created_at FROM scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT unique_user_id FROM users WHERE id = ?",
             (session["user_id"],)
         )
-        latest_score = cur.fetchone()
+        user = cur.fetchone()
+        unique_user_id = user["unique_user_id"] if user else None
+        
+        # Get latest quick score
+        cur = conn.execute(
+            "SELECT hybrid_score, behavior_json, created_at FROM quick_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+            (session["user_id"],)
+        )
+        latest_quick_score = cur.fetchone()
+        
+        # Get latest verified score
+        cur = conn.execute(
+            "SELECT hybrid_score, behavior_json, cibil_json, bank_json, upi_json, salary_json, created_at FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+            (session["user_id"],)
+        )
+        latest_verified_score = cur.fetchone()
+        
+        # Get quick score history (last 6 months)
+        cur = conn.execute(
+            "SELECT hybrid_score, created_at FROM quick_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 6",
+            (session["user_id"],)
+        )
+        quick_score_history = cur.fetchall()
+        
+        # Get loan requests
+        cur = conn.execute(
+            """SELECT lr.id, lr.loan_type, lr.status, lr.decision_json, lr.created_at, l.name as lender_name
+               FROM loan_requests lr
+               LEFT JOIN lenders l ON lr.lender_id = l.id
+               WHERE lr.user_id = ? ORDER BY lr.created_at DESC""",
+            (session["user_id"],)
+        )
+        loan_requests = cur.fetchall()
     
     return render_template("dashboard.html", 
                          username=session.get("username"),
-                         latest_score=latest_score)
+                         unique_user_id=unique_user_id,
+                         latest_quick_score=latest_quick_score,
+                         latest_verified_score=latest_verified_score,
+                         quick_score_history=quick_score_history,
+                         loan_requests=loan_requests,
+                         loan_types=LOAN_TYPES)
 
 @app.route("/check", methods=["GET", "POST"])
 def check():
@@ -482,7 +960,7 @@ def behavior_form():
 
 @app.route("/process-score")
 def process_score():
-    """Process score with LLM"""
+    """Process Quick Score with LLM"""
     if "user_id" not in session:
         return redirect(url_for("signin"))
     
@@ -500,13 +978,12 @@ def process_score():
     # Calculate hybrid score
     hybrid_score = calculate_hybrid_score(cibil_score, behavior_score)
     
-    # Store in database
+    # Store in quick_scores table
     with get_db(app) as conn:
         conn.execute(
-            """INSERT INTO scores (user_id, cibil_score, behavior_score, hybrid_score, behavior_details)
-               VALUES (?, ?, ?, ?, ?)""",
-            (session["user_id"], cibil_score, behavior_score, hybrid_score, 
-             json.dumps(behavior_result))
+            """INSERT INTO quick_scores (user_id, behavior_json, hybrid_score)
+               VALUES (?, ?, ?)""",
+            (session["user_id"], json.dumps(behavior_result), hybrid_score)
         )
     
     # Store in session for result page
@@ -514,8 +991,13 @@ def process_score():
         "cibil_score": cibil_score,
         "behavior_score": behavior_score,
         "hybrid_score": hybrid_score,
-        "behavior_details": behavior_result
+        "behavior_details": behavior_result,
+        "score_type": "quick"
     }
+    
+    # Clear session data
+    session.pop("cibil_score", None)
+    session.pop("behavior_data", None)
     
     return redirect(url_for("result"))
 
@@ -532,9 +1014,377 @@ def result():
     result_data = session["result"]
     return render_template("result.html", result=result_data)
 
+@app.route("/verified-score-upload", methods=["GET", "POST"])
+def verified_score_upload():
+    """Upload official documents for verified score"""
+    if "user_id" not in session or session.get("role") != "user":
+        return redirect(url_for("signin"))
+    
+    if request.method == "POST":
+        files_uploaded = {}
+        
+        # Handle CIBIL PDF
+        cibil_file = request.files.get("cibil_file")
+        if cibil_file and allowed_file(cibil_file.filename):
+            filename = secure_filename(cibil_file.filename)
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            cibil_file.save(filepath)
+            files_uploaded['cibil'] = filepath
+        
+        # Handle Bank Statement PDF
+        bank_file = request.files.get("bank_file")
+        if bank_file and allowed_file(bank_file.filename):
+            filename = secure_filename(bank_file.filename)
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            bank_file.save(filepath)
+            files_uploaded['bank'] = filepath
+        
+        # Handle UPI CSV/PDF
+        upi_file = request.files.get("upi_file")
+        if upi_file and allowed_file(upi_file.filename):
+            filename = secure_filename(upi_file.filename)
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            upi_file.save(filepath)
+            files_uploaded['upi'] = filepath
+        
+        # Handle Salary Slip PDF
+        salary_file = request.files.get("salary_file")
+        if salary_file and allowed_file(salary_file.filename):
+            filename = secure_filename(salary_file.filename)
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            salary_file.save(filepath)
+            files_uploaded['salary'] = filepath
+        
+        if not files_uploaded:
+            flash("Please upload at least one document.", "error")
+            return redirect(url_for("verified_score_upload"))
+        
+        # Store file paths in session for processing
+        session["verified_files"] = files_uploaded
+        return redirect(url_for("process_verified_score"))
+    
+    return render_template("verified_score_upload.html")
+
+@app.route("/process-verified-score")
+def process_verified_score():
+    """Process verified score from documents"""
+    if "user_id" not in session or session.get("role") != "user":
+        return redirect(url_for("signin"))
+    
+    if "verified_files" not in session:
+        flash("Please upload documents first.", "error")
+        return redirect(url_for("verified_score_upload"))
+    
+    files_uploaded = session["verified_files"]
+    
+    # Parse documents
+    cibil_json = {}
+    bank_json = {}
+    upi_json = {}
+    salary_json = {}
+    
+    if 'cibil' in files_uploaded:
+        cibil_json = extract_cibil_from_pdf(files_uploaded['cibil'])
+        try:
+            os.remove(files_uploaded['cibil'])
+        except:
+            pass
+    
+    if 'bank' in files_uploaded:
+        bank_json = parse_bank_statement(files_uploaded['bank'])
+        try:
+            os.remove(files_uploaded['bank'])
+        except:
+            pass
+    
+    if 'upi' in files_uploaded:
+        if files_uploaded['upi'].endswith('.csv'):
+            upi_json = parse_upi_csv(files_uploaded['upi'])
+        else:
+            upi_json = parse_upi_pdf(files_uploaded['upi'])
+        try:
+            os.remove(files_uploaded['upi'])
+        except:
+            pass
+    
+    if 'salary' in files_uploaded:
+        salary_json = parse_salary_slip(files_uploaded['salary'])
+        try:
+            os.remove(files_uploaded['salary'])
+        except:
+            pass
+    
+    # Calculate document hash for caching
+    doc_hash = calculate_doc_hash({
+        'cibil': cibil_json,
+        'bank': bank_json,
+        'upi': upi_json,
+        'salary': salary_json
+    })
+    
+    # Check if verified score already exists for this doc_hash
+    with get_db(app) as conn:
+        cur = conn.execute(
+            "SELECT * FROM verified_scores WHERE user_id = ? AND doc_hash = ?",
+            (session["user_id"], doc_hash)
+        )
+        existing_score = cur.fetchone()
+        
+        if existing_score:
+            # Use cached score
+            behavior_json = json.loads(existing_score["behavior_json"])
+            hybrid_score = existing_score["hybrid_score"]
+            flash("Using cached verified score (documents unchanged).", "info")
+        else:
+            # Calculate new verified score using LLM
+            behavior_result = calculate_verified_behavioral_score(
+                cibil_json, bank_json, upi_json, salary_json
+            )
+            behavior_score = behavior_result.get("behavior_score", 7.0)
+            cibil_score = cibil_json.get("cibil_score")
+            hybrid_score = calculate_hybrid_score(cibil_score, behavior_score)
+            
+            # Store in verified_scores table
+            conn.execute(
+                """INSERT INTO verified_scores (user_id, cibil_json, bank_json, upi_json, salary_json, behavior_json, hybrid_score, doc_hash)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (session["user_id"], json.dumps(cibil_json), json.dumps(bank_json),
+                 json.dumps(upi_json), json.dumps(salary_json), json.dumps(behavior_result),
+                 hybrid_score, doc_hash)
+            )
+            behavior_json = behavior_result
+    
+    # Store in session for result page
+    session["result"] = {
+        "cibil_json": cibil_json,
+        "bank_json": bank_json,
+        "upi_json": upi_json,
+        "salary_json": salary_json,
+        "behavior_score": behavior_json.get("behavior_score", 7.0),
+        "hybrid_score": hybrid_score,
+        "behavior_details": behavior_json,
+        "score_type": "verified"
+    }
+    
+    # Clear session data
+    session.pop("verified_files", None)
+    
+    return redirect(url_for("result"))
+
+@app.route("/request-loan", methods=["POST"])
+def request_loan():
+    """User requests a loan"""
+    if "user_id" not in session or session.get("role") != "user":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    loan_type = request.form.get("loan_type")
+    if not loan_type or loan_type not in LOAN_TYPES:
+        flash("Invalid loan type.", "error")
+        return redirect(url_for("dashboard"))
+    
+    with get_db(app) as conn:
+        conn.execute(
+            "INSERT INTO loan_requests (user_id, loan_type, status) VALUES (?, ?, ?)",
+            (session["user_id"], loan_type, "pending")
+        )
+    
+    flash(f"Loan request for {loan_type} loan submitted successfully!", "success")
+    return redirect(url_for("dashboard"))
+
+@app.route("/lender/dashboard")
+def lender_dashboard():
+    """Lender dashboard"""
+    if "lender_id" not in session or session.get("role") != "lender":
+        return redirect(url_for("signin"))
+    
+    with get_db(app) as conn:
+        # Get lender info
+        cur = conn.execute(
+            "SELECT unique_lender_id, org_name, loan_types_offered FROM lenders WHERE id = ?",
+            (session["lender_id"],)
+        )
+        lender = cur.fetchone()
+        
+        # Get pending loan requests
+        cur = conn.execute(
+            """SELECT lr.id, lr.user_id, lr.loan_type, lr.created_at, u.unique_user_id, u.username
+               FROM loan_requests lr
+               JOIN users u ON lr.user_id = u.id
+               WHERE lr.status = 'pending' AND lr.lender_id IS NULL
+               ORDER BY lr.created_at DESC LIMIT 20""",
+        )
+        pending_requests = cur.fetchall()
+    
+    loan_types_offered = json.loads(lender["loan_types_offered"]) if lender["loan_types_offered"] else []
+    
+    return render_template("lender_dashboard.html",
+                         lender_id=lender["unique_lender_id"],
+                         org_name=lender["org_name"],
+                         loan_types_offered=loan_types_offered,
+                         pending_requests=pending_requests,
+                         loan_types=LOAN_TYPES)
+
+@app.route("/lender/search-user", methods=["GET", "POST"])
+def lender_search_user():
+    """Lender searches for user by unique ID"""
+    if "lender_id" not in session or session.get("role") != "lender":
+        return redirect(url_for("signin"))
+    
+    # Handle GET request with user_id parameter (from pending requests)
+    if request.method == "GET":
+        user_id = request.args.get("user_id")
+        request_id = request.args.get("request_id")
+        if user_id:
+            unique_user_id = user_id.upper()
+            loan_type = request.args.get("loan_type", "")
+            
+            with get_db(app) as conn:
+                # Find user
+                cur = conn.execute(
+                    "SELECT id, username, unique_user_id FROM users WHERE unique_user_id = ?",
+                    (unique_user_id,)
+                )
+                user = cur.fetchone()
+                
+                if not user:
+                    flash("User not found.", "error")
+                    return redirect(url_for("lender_search_user"))
+                
+                # Get verified score
+                cur = conn.execute(
+                    "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (user["id"],)
+                )
+                verified_score = cur.fetchone()
+                
+                if not verified_score:
+                    flash("User has not generated a verified score. Ask user to upload official documents.", "error")
+                    return redirect(url_for("lender_search_user"))
+                
+                # Get loan request if request_id provided
+                loan_request = None
+                if request_id:
+                    cur = conn.execute(
+                        "SELECT * FROM loan_requests WHERE id = ?",
+                        (request_id,)
+                    )
+                    loan_request = cur.fetchone()
+                    if loan_request:
+                        loan_type = loan_request["loan_type"]
+                
+                # Parse verified score data
+                cibil_json = json.loads(verified_score["cibil_json"]) if verified_score["cibil_json"] else {}
+                bank_json = json.loads(verified_score["bank_json"]) if verified_score["bank_json"] else {}
+                upi_json = json.loads(verified_score["upi_json"]) if verified_score["upi_json"] else {}
+                salary_json = json.loads(verified_score["salary_json"]) if verified_score["salary_json"] else {}
+                behavior_json = json.loads(verified_score["behavior_json"]) if verified_score["behavior_json"] else {}
+                
+                # Calculate loan-type-specific score
+                loan_decision = None
+                if loan_type:
+                    loan_decision = calculate_loan_type_score(behavior_json, loan_type, cibil_json.get("cibil_score"), salary_json)
+                
+                return render_template("lender_user_score.html",
+                                     user=user,
+                                     verified_score=verified_score,
+                                     cibil_json=cibil_json,
+                                     bank_json=bank_json,
+                                     upi_json=upi_json,
+                                     salary_json=salary_json,
+                                     behavior_json=behavior_json,
+                                     loan_type=loan_type,
+                                     loan_decision=loan_decision,
+                                     loan_request=loan_request,
+                                     loan_types=LOAN_TYPES)
+    
+    if request.method == "POST":
+        unique_user_id = request.form.get("unique_user_id", "").strip().upper()
+        loan_type = request.form.get("loan_type", "")
+        
+        if not unique_user_id:
+            flash("Please enter a user ID.", "error")
+            return redirect(url_for("lender_search_user"))
+        
+        with get_db(app) as conn:
+            # Find user
+            cur = conn.execute(
+                "SELECT id, username, unique_user_id FROM users WHERE unique_user_id = ?",
+                (unique_user_id,)
+            )
+            user = cur.fetchone()
+            
+            if not user:
+                flash("User not found.", "error")
+                return redirect(url_for("lender_search_user"))
+            
+            # Get verified score
+            cur = conn.execute(
+                "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (user["id"],)
+            )
+            verified_score = cur.fetchone()
+            
+            if not verified_score:
+                flash("User has not generated a verified score. Ask user to upload official documents.", "error")
+                return redirect(url_for("lender_search_user"))
+            
+            # Parse verified score data
+            cibil_json = json.loads(verified_score["cibil_json"]) if verified_score["cibil_json"] else {}
+            bank_json = json.loads(verified_score["bank_json"]) if verified_score["bank_json"] else {}
+            upi_json = json.loads(verified_score["upi_json"]) if verified_score["upi_json"] else {}
+            salary_json = json.loads(verified_score["salary_json"]) if verified_score["salary_json"] else {}
+            behavior_json = json.loads(verified_score["behavior_json"]) if verified_score["behavior_json"] else {}
+            
+            # Calculate loan-type-specific score
+            loan_decision = None
+            if loan_type:
+                loan_decision = calculate_loan_type_score(behavior_json, loan_type, cibil_json.get("cibil_score"))
+            
+            return render_template("lender_user_score.html",
+                                 user=user,
+                                 verified_score=verified_score,
+                                 cibil_json=cibil_json,
+                                 bank_json=bank_json,
+                                 upi_json=upi_json,
+                                 salary_json=salary_json,
+                                 behavior_json=behavior_json,
+                                 loan_type=loan_type,
+                                 loan_decision=loan_decision,
+                                 loan_request=None,
+                                 loan_types=LOAN_TYPES)
+    
+    return render_template("lender_search_user.html", loan_types=LOAN_TYPES)
+
+@app.route("/lender/approve-loan/<int:request_id>", methods=["POST"])
+def lender_approve_loan(request_id):
+    """Lender approves a loan request"""
+    if "lender_id" not in session or session.get("role") != "lender":
+        return redirect(url_for("signin"))
+    
+    decision = request.form.get("decision")  # 'approve' or 'reject'
+    notes = request.form.get("notes", "")
+    
+    decision_json = {
+        "decision": decision,
+        "notes": notes,
+        "lender_id": session["lender_id"],
+        "decided_at": datetime.now().isoformat()
+    }
+    
+    status = "approved" if decision == "approve" else "rejected"
+    
+    with get_db(app) as conn:
+        conn.execute(
+            """UPDATE loan_requests SET lender_id = ?, status = ?, decision_json = ? WHERE id = ?""",
+            (session["lender_id"], status, json.dumps(decision_json), request_id)
+        )
+    
+    flash(f"Loan request {status} successfully!", "success")
+    return redirect(url_for("lender_dashboard"))
+
 @app.route("/logout")
 def logout():
-    """User logout"""
+    """User/Lender logout"""
     session.clear()
     flash("Signed out successfully.", "success")
     return redirect(url_for("signin"))

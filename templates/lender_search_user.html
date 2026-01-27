@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search User - InsightScore</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #035fdf;
+            --accent: #00c896;
+            --bg-soft: #f5f7fb;
+            --text-main: #07111f;
+            --text-muted: #5f6b80;
+            --card-bg: #ffffff;
+            --shadow: 0 18px 45px rgba(15, 35, 52, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Inter", system-ui, sans-serif;
+            background-image: url("{{ url_for('static', filename='assets/bg.png') }}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 32px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #0481ff);
+            color: white;
+            box-shadow: 0 4px 12px rgba(3, 95, 223, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-soft);
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Search User by Unique ID</h1>
+            <a href="{{ url_for('lender_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+
+        <div class="card">
+            <form method="post" action="{{ url_for('lender_search_user') }}">
+                <div class="form-group">
+                    <label for="unique_user_id">User Unique ID (e.g., USR-XXXX)</label>
+                    <input type="text" id="unique_user_id" name="unique_user_id" placeholder="USR-XXXX" required style="text-transform: uppercase;">
+                </div>
+
+                <div class="form-group">
+                    <label for="loan_type">Loan Type (for scoring)</label>
+                    <select id="loan_type" name="loan_type">
+                        <option value="">Select loan type...</option>
+                        {% for loan_type in loan_types %}
+                        <option value="{{ loan_type }}">{{ loan_type|title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Search User</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+

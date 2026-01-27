@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Score - InsightScore</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #035fdf;
+            --accent: #00c896;
+            --bg-soft: #f5f7fb;
+            --text-main: #07111f;
+            --text-muted: #5f6b80;
+            --card-bg: #ffffff;
+            --shadow: 0 18px 45px rgba(15, 35, 52, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Inter", system-ui, sans-serif;
+            background-image: url("{{ url_for('static', filename='assets/bg.png') }}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 32px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #0481ff);
+            color: white;
+            box-shadow: 0 4px 12px rgba(3, 95, 223, 0.3);
+        }
+
+        .btn-success {
+            background: #22c55e;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--bg-soft);
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            margin-bottom: 24px;
+        }
+
+        .card h3 {
+            font-size: 20px;
+            color: var(--text-main);
+            margin-bottom: 20px;
+        }
+
+        .score-display {
+            text-align: center;
+            padding: 32px;
+            background: var(--bg-soft);
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .score-value {
+            font-size: 64px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .info-item {
+            padding: 16px;
+            background: var(--bg-soft);
+            border-radius: 12px;
+        }
+
+        .info-item label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .info-item strong {
+            font-size: 18px;
+            color: var(--text-main);
+        }
+
+        .recommendation-box {
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .recommendation-approve {
+            background: #d1fae5;
+            border-left: 4px solid #22c55e;
+        }
+
+        .recommendation-reject {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .recommendation-caution {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .sub-scores {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .sub-score-item {
+            padding: 16px;
+            background: var(--bg-soft);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .sub-score-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>User Score Details</h1>
+                <p style="color: var(--text-muted); margin-top: 4px;">User: {{ user.unique_user_id }} ({{ user.username }})</p>
+            </div>
+            <a href="{{ url_for('lender_search_user') }}" class="btn btn-secondary">Search Another User</a>
+        </div>
+
+        <!-- Verified Hybrid Score -->
+        <div class="card">
+            <h3>Verified Hybrid Score</h3>
+            <div class="score-display">
+                <div class="score-value">{{ "%.0f"|format(verified_score.hybrid_score) }}</div>
+                <p style="color: var(--text-muted); margin-top: 8px;">Last Updated: {{ verified_score.created_at }}</p>
+            </div>
+
+            {% if behavior_json %}
+            <div class="sub-scores">
+                <div class="sub-score-item">
+                    <div style="font-size: 12px; color: var(--text-muted);">Income Stability</div>
+                    <div class="sub-score-value">{{ "%.1f"|format(behavior_json.get('income_stability_score', 0)) }}</div>
+                </div>
+                <div class="sub-score-item">
+                    <div style="font-size: 12px; color: var(--text-muted);">Spending Discipline</div>
+                    <div class="sub-score-value">{{ "%.1f"|format(behavior_json.get('spending_discipline_score', 0)) }}</div>
+                </div>
+                <div class="sub-score-item">
+                    <div style="font-size: 12px; color: var(--text-muted);">Savings Behavior</div>
+                    <div class="sub-score-value">{{ "%.1f"|format(behavior_json.get('savings_behavior_score', 0)) }}</div>
+                </div>
+                <div class="sub-score-item">
+                    <div style="font-size: 12px; color: var(--text-muted);">Payment Discipline</div>
+                    <div class="sub-score-value">{{ "%.1f"|format(behavior_json.get('payment_discipline_score', 0)) }}</div>
+                </div>
+                <div class="sub-score-item">
+                    <div style="font-size: 12px; color: var(--text-muted);">Digital Behavior</div>
+                    <div class="sub-score-value">{{ "%.1f"|format(behavior_json.get('digital_behavior_score', 0)) }}</div>
+                </div>
+                <div class="sub-score-item">
+                    <div style="font-size: 12px; color: var(--text-muted);">Lifestyle Stability</div>
+                    <div class="sub-score-value">{{ "%.1f"|format(behavior_json.get('lifestyle_stability_score', 0)) }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Loan Decision -->
+        {% if loan_type and loan_decision %}
+        <div class="card">
+            <h3>Loan-Type-Based Analysis ({{ loan_type|title }})</h3>
+            <div class="recommendation-box recommendation-{{ loan_decision.recommendation.lower().replace(' ', '-').replace('/', '-') }}">
+                <h4 style="margin-bottom: 8px;">Recommendation: {{ loan_decision.recommendation }}</h4>
+                <p style="margin-bottom: 8px;"><strong>Adjusted Score:</strong> {{ "%.0f"|format(loan_decision.adjusted_score) }}</p>
+                <p style="margin-bottom: 8px;"><strong>Risk Level:</strong> {{ loan_decision.risk_level }}</p>
+                {% if loan_decision.max_emi_affordability %}
+                <p><strong>Max EMI Affordability:</strong> ₹{{ "%.0f"|format(loan_decision.max_emi_affordability) }}/month</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Document Details -->
+        <div class="grid">
+            {% if cibil_json and cibil_json.get('cibil_score') %}
+            <div class="card">
+                <h3>CIBIL Score</h3>
+                <div class="info-item">
+                    <label>CIBIL Score</label>
+                    <strong>{{ cibil_json.get('cibil_score') }}</strong>
+                </div>
+                {% if cibil_json.get('late_payments') %}
+                <div class="info-item" style="margin-top: 12px;">
+                    <label>Late Payments</label>
+                    <strong>{{ cibil_json.get('late_payments') }}</strong>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if bank_json %}
+            <div class="card">
+                <h3>Bank Statement</h3>
+                {% if bank_json.get('avg_balance') %}
+                <div class="info-item">
+                    <label>Average Balance</label>
+                    <strong>₹{{ "%.0f"|format(bank_json.get('avg_balance', 0)) }}</strong>
+                </div>
+                {% endif %}
+                {% if bank_json.get('negative_balance') %}
+                <div class="info-item" style="margin-top: 12px; background: #fee2e2;">
+                    <label>Negative Balance</label>
+                    <strong>Yes</strong>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if salary_json and salary_json.get('gross_salary') %}
+            <div class="card">
+                <h3>Salary Information</h3>
+                <div class="info-item">
+                    <label>Gross Salary</label>
+                    <strong>₹{{ "%.0f"|format(salary_json.get('gross_salary', 0)) }}</strong>
+                </div>
+                {% if salary_json.get('net_salary') %}
+                <div class="info-item" style="margin-top: 12px;">
+                    <label>Net Salary</label>
+                    <strong>₹{{ "%.0f"|format(salary_json.get('net_salary', 0)) }}</strong>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Insights -->
+        {% if behavior_json %}
+        <div class="card">
+            <h3>Key Insights</h3>
+            {% if behavior_json.get('key_insights') %}
+            <div style="margin-top: 16px;">
+                {% if behavior_json.key_insights.get('positive') %}
+                <div style="margin-bottom: 16px;">
+                    <strong style="color: #22c55e;">Positive:</strong>
+                    <ul style="margin-top: 8px; padding-left: 20px;">
+                        {% for insight in behavior_json.key_insights.positive %}
+                        <li style="margin-bottom: 4px;">{{ insight }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                {% if behavior_json.key_insights.get('negative') %}
+                <div>
+                    <strong style="color: #ef4444;">Negative:</strong>
+                    <ul style="margin-top: 8px; padding-left: 20px;">
+                        {% for insight in behavior_json.key_insights.negative %}
+                        <li style="margin-bottom: 4px;">{{ insight }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if behavior_json.get('red_flags') %}
+            <div style="margin-top: 16px; padding: 16px; background: #fee2e2; border-radius: 12px;">
+                <strong style="color: #991b1b;">Red Flags:</strong>
+                <ul style="margin-top: 8px; padding-left: 20px;">
+                    {% for flag in behavior_json.red_flags %}
+                    <li style="margin-bottom: 4px;">{{ flag }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Approve/Reject Form -->
+        {% if loan_request %}
+        <div class="card">
+            <h3>Loan Decision for Request #{{ loan_request.id }}</h3>
+            <form method="post" action="{{ url_for('lender_approve_loan', request_id=loan_request.id) }}">
+                <div class="form-group">
+                    <label>Decision</label>
+                    <select name="decision" required style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <option value="">Select decision...</option>
+                        <option value="approve">Approve</option>
+                        <option value="reject">Reject</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes (Optional)</label>
+                    <textarea name="notes" placeholder="Add any notes about this decision..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Submit Decision</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
+

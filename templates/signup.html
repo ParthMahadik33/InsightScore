@@ -11,7 +11,17 @@ Already have an account?
 {% block subheading %}It only takes a moment to get started.{% endblock %}
 
 {% block form %}
-<form method="post" action="{{ url_for('signup') }}">
+<form method="post" action="{{ url_for('signup') }}" id="signupForm">
+  <div class="field-group">
+    <label for="role">Account Type</label>
+    <div class="field-input">
+      <select id="role" name="role" required style="width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid rgba(148, 163, 184, 0.8); background: rgba(255, 255, 255, 0.7); font-size: 13px;">
+        <option value="user">Regular User</option>
+        <option value="lender">Money Lender</option>
+      </select>
+    </div>
+  </div>
+
   <div class="field-group">
     <label for="username">Name</label>
     <div class="field-input">
@@ -23,6 +33,31 @@ Already have an account?
         required
         autocomplete="name"
       />
+    </div>
+  </div>
+
+  <div class="field-group" id="orgNameGroup" style="display: none;">
+    <label for="org_name">Organization Name (Optional)</label>
+    <div class="field-input">
+      <input
+        type="text"
+        id="org_name"
+        name="org_name"
+        placeholder="ABC Finance Ltd."
+        autocomplete="organization"
+      />
+    </div>
+  </div>
+
+  <div class="field-group" id="loanTypesGroup" style="display: none;">
+    <label>Loan Types Offered</label>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px;">
+      {% for loan_type in loan_types %}
+      <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+        <input type="checkbox" name="loan_types" value="{{ loan_type }}" style="width: 14px; height: 14px;">
+        {{ loan_type|title }}
+      </label>
+      {% endfor %}
     </div>
   </div>
 
@@ -102,5 +137,13 @@ Already have an account?
     >.
   </div>
 </form>
+
+<script>
+  document.getElementById('role').addEventListener('change', function() {
+    const isLender = this.value === 'lender';
+    document.getElementById('orgNameGroup').style.display = isLender ? 'block' : 'none';
+    document.getElementById('loanTypesGroup').style.display = isLender ? 'block' : 'none';
+  });
+</script>
 {% endblock %}
 

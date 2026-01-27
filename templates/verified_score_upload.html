@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Documents - InsightScore</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #035fdf;
+            --accent: #00c896;
+            --bg-soft: #f5f7fb;
+            --text-main: #07111f;
+            --text-muted: #5f6b80;
+            --card-bg: #ffffff;
+            --shadow: 0 18px 45px rgba(15, 35, 52, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Inter", system-ui, sans-serif;
+            background-image: url("{{ url_for('static', filename='assets/bg.png') }}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 32px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            color: var(--text-main);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #0481ff);
+            color: white;
+            box-shadow: 0 4px 12px rgba(3, 95, 223, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-soft);
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            margin-bottom: 24px;
+        }
+
+        .card h2 {
+            font-size: 20px;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px dashed #e2e8f0;
+            border-radius: 12px;
+            background: var(--bg-soft);
+            cursor: pointer;
+        }
+
+        .form-group input[type="file"]:hover {
+            border-color: var(--primary);
+        }
+
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: var(--text-main);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Upload Official Documents</h1>
+            <div>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Verified InsightScore</h2>
+            <p>Upload official documents to generate a verified score that lenders can see. This score is based solely on verified document data, not self-reported information.</p>
+
+            <div class="info-box">
+                <p><strong>Note:</strong> Upload at least one document. The more documents you upload, the more accurate your verified score will be.</p>
+            </div>
+
+            <form method="post" action="{{ url_for('verified_score_upload') }}" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="cibil_file">CIBIL/Experian/CRIF Credit Report (PDF)</label>
+                    <input type="file" id="cibil_file" name="cibil_file" accept=".pdf">
+                </div>
+
+                <div class="form-group">
+                    <label for="bank_file">Bank Statement (PDF)</label>
+                    <input type="file" id="bank_file" name="bank_file" accept=".pdf">
+                </div>
+
+                <div class="form-group">
+                    <label for="upi_file">UPI Transaction Statement (PDF or CSV)</label>
+                    <input type="file" id="upi_file" name="upi_file" accept=".pdf,.csv">
+                </div>
+
+                <div class="form-group">
+                    <label for="salary_file">Salary Slip (PDF) - Optional</label>
+                    <input type="file" id="salary_file" name="salary_file" accept=".pdf">
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Generate Verified Score</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+
