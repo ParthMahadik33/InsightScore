@@ -116,24 +116,14 @@
                     <input type="text" id="unique_user_id" name="unique_user_id" placeholder="USR-XXXX" required style="text-transform: uppercase;">
                 </div>
 
-                <div class="form-group">
-                    <label for="loan_type">Loan Type (for scoring)</label>
-                    <select id="loan_type" name="loan_type">
-                        <option value="">Select loan type...</option>
-                        {% for loan_type in loan_types %}
-                        <option value="{{ loan_type }}">{{ loan_type|title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Search User & Check Score</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Search User</button>
             </form>
         </div>
 
-        <!-- User Info Display (if searched via GET) -->
+        <!-- User Info Display (if searched via GET or POST) -->
         {% if user_info %}
         <div class="card" style="margin-top: 24px;">
-            <h3>User Found</h3>
+            <h3>User Profile</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
                 <div style="padding: 16px; background: var(--bg-soft); border-radius: 12px;">
                     <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">User ID</label>
@@ -143,9 +133,15 @@
                     <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Username</label>
                     <strong>{{ user_info.username }}</strong>
                 </div>
+                {% if user_info.loan_type %}
+                <div style="padding: 16px; background: #eff6ff; border-radius: 12px; border-left: 4px solid var(--primary);">
+                    <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Loan Requested</label>
+                    <strong style="color: var(--primary);">{{ user_info.loan_type|title }} Loan</strong>
+                </div>
+                {% endif %}
             </div>
             <div style="margin-top: 20px;">
-                <a href="{{ url_for('lender_search_user') }}?user_id={{ user_info.unique_user_id }}{% if loan_type %}&loan_type={{ loan_type }}{% endif %}" class="btn btn-primary" style="width: 100%;">Check Verified Score</a>
+                <a href="{{ url_for('lender_search_user') }}?user_id={{ user_info.unique_user_id }}{% if user_info.loan_type %}&loan_type={{ user_info.loan_type }}{% endif %}{% if user_info.request_id %}&request_id={{ user_info.request_id }}{% endif %}" class="btn btn-primary" style="width: 100%;">Check Verified Score</a>
             </div>
         </div>
         {% endif %}

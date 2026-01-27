@@ -1357,7 +1357,6 @@ def lender_search_user():
     
     if request.method == "POST":
         unique_user_id = request.form.get("unique_user_id", "").strip().upper()
-        loan_type = request.form.get("loan_type", "")
         
         if not unique_user_id:
             flash("Please enter a user ID.", "error")
@@ -1375,67 +1374,34 @@ def lender_search_user():
                 flash("User not found.", "error")
                 return redirect(url_for("lender_search_user"))
             
-            # Get verified score
+            # Get user's pending loan request to show loan type
             cur = conn.execute(
-                "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                """SELECT loan_type, id FROM loan_requests 
+                   WHERE user_id = ? AND status = 'pending' 
+                   ORDER BY created_at DESC LIMIT 1""",
                 (user["id"],)
             )
-            verified_score = cur.fetchone()
+            loan_request = cur.fetchone()
+            loan_type = loan_request["loan_type"] if loan_request else None
+            request_id = loan_request["id"] if loan_request else None
             
-            if not verified_score:
-                # Send notification to user
-                lender_name = session.get("username", "A lender")
-                conn.execute(
-                    """INSERT INTO notifications (user_id, lender_id, notification_type, message)
-                       VALUES (?, ?, ?, ?)""",
-                    (user["id"], session["lender_id"], "score_request",
-                     f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.")
-                )
-                conn.commit()
-                
-                # Get lender info for display
-                cur = conn.execute(
-                    "SELECT name, org_name FROM lenders WHERE id = ?",
-                    (session["lender_id"],)
-                )
-                lender_info = cur.fetchone()
-                
-                return render_template("lender_user_no_score.html",
-                                     user=user,
-                                     lender_info=lender_info,
-                                     loan_type=loan_type,
-                                     request_id=None,
-                                     loan_types=LOAN_TYPES)
+            # Prepare user info for display
+            user_info = {
+                "id": user["id"],
+                "username": user["username"],
+                "unique_user_id": user["unique_user_id"],
+                "loan_type": loan_type,
+                "request_id": request_id
+            }
             
-            # Parse verified score data
-            cibil_json = json.loads(verified_score["cibil_json"]) if verified_score["cibil_json"] else {}
-            bank_json = json.loads(verified_score["bank_json"]) if verified_score["bank_json"] else {}
-            upi_json = json.loads(verified_score["upi_json"]) if verified_score["upi_json"] else {}
-            salary_json = json.loads(verified_score["salary_json"]) if verified_score["salary_json"] else {}
-            behavior_json = json.loads(verified_score["behavior_json"]) if verified_score["behavior_json"] else {}
-            
-            # Calculate loan-type-specific score
-            loan_decision = None
-            if loan_type:
-                loan_decision = calculate_loan_type_score(behavior_json, loan_type, cibil_json.get("cibil_score"), salary_json)
-            
-            return render_template("lender_user_score.html",
-                                 user=user,
-                                 verified_score=verified_score,
-                                 cibil_json=cibil_json,
-                                 bank_json=bank_json,
-                                 upi_json=upi_json,
-                                 salary_json=salary_json,
-                                 behavior_json=behavior_json,
-                                 loan_type=loan_type,
-                                 loan_decision=loan_decision,
-                                 loan_request=None,
-                                 loan_types=LOAN_TYPES)
+            # Show user profile card first (with loan type if they have a pending request)
+            return render_template("lender_search_user.html",
+                                 loan_types=LOAN_TYPES,
+                                 user_info=user_info)
     
     # Check if user_id is provided in GET request for display
     user_id = request.args.get("user_id")
     user_info = None
-    loan_type_param = request.args.get("loan_type", "")
     
     if user_id:
         with get_db(app) as conn:
@@ -1443,12 +1409,29 @@ def lender_search_user():
                 "SELECT id, username, unique_user_id FROM users WHERE unique_user_id = ?",
                 (user_id.upper(),)
             )
-            user_info = cur.fetchone()
+            user = cur.fetchone()
+            
+            if user:
+                # Get user's pending loan request to show loan type
+                cur = conn.execute(
+                    """SELECT loan_type, id FROM loan_requests 
+                       WHERE user_id = ? AND status = 'pending' 
+                       ORDER BY created_at DESC LIMIT 1""",
+                    (user["id"],)
+                )
+                loan_request = cur.fetchone()
+                
+                user_info = {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "unique_user_id": user["unique_user_id"],
+                    "loan_type": loan_request["loan_type"] if loan_request else None,
+                    "request_id": loan_request["id"] if loan_request else None
+                }
     
     return render_template("lender_search_user.html", 
                          loan_types=LOAN_TYPES,
-                         user_info=user_info,
-                         loan_type=loan_type_param)
+                         user_info=user_info)
 
 @app.route("/lender/approve-loan/<int:request_id>", methods=["POST"])
 def lender_approve_loan(request_id):
