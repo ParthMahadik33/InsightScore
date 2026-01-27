@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behavioral Information - InsightScore</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #035fdf;
+            --accent: #00c896;
+            --bg-soft: #f5f7fb;
+            --text-main: #07111f;
+            --text-muted: #5f6b80;
+            --card-bg: #ffffff;
+            --shadow: 0 18px 45px rgba(15, 35, 52, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Inter", system-ui, sans-serif;
+            background-image: url("{{ url_for('static', filename='assets/bg.png') }}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 16px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 640px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-main);
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input[type="number"],
+        .form-group select,
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-group input[type="number"]:focus,
+        .form-group select:focus,
+        .form-group input[type="file"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(3, 95, 223, 0.1);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary), #0481ff);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(3, 95, 223, 0.3);
+            margin-top: 24px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(3, 95, 223, 0.4);
+        }
+
+        .file-info {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Behavioral Information</h1>
+            <p>Help us understand your financial behavior</p>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="section">
+                <div class="section-title">A) Income</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="monthly_income">Monthly Income (₹)</label>
+                        <input type="number" id="monthly_income" name="monthly_income" 
+                               placeholder="e.g., 50000" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="income_stability">Income Stability</label>
+                        <select id="income_stability" name="income_stability" required>
+                            <option value="">Select...</option>
+                            <option value="stable">Stable</option>
+                            <option value="variable">Variable</option>
+                            <option value="irregular">Irregular</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">B) Expenses & Savings</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="monthly_expenses">Monthly Expenses (₹)</label>
+                        <input type="number" id="monthly_expenses" name="monthly_expenses" 
+                               placeholder="e.g., 30000" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="monthly_savings">Monthly Savings (₹)</label>
+                        <input type="number" id="monthly_savings" name="monthly_savings" 
+                               placeholder="e.g., 20000" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="emergency_fund">Do you have an emergency fund?</label>
+                    <select id="emergency_fund" name="emergency_fund" required>
+                        <option value="">Select...</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">C) Bill Payment Discipline</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="paid_bills_on_time">Paid Bills On Time</label>
+                        <select id="paid_bills_on_time" name="paid_bills_on_time" required>
+                            <option value="">Select...</option>
+                            <option value="always">Always</option>
+                            <option value="sometimes">Sometimes</option>
+                            <option value="rarely">Rarely</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="missed_payments">Missed Payments?</label>
+                        <select id="missed_payments" name="missed_payments" required>
+                            <option value="">Select...</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">D) UPI & Digital Behavior</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="monthly_upi_transactions">Monthly UPI Transactions (count)</label>
+                        <input type="number" id="monthly_upi_transactions" name="monthly_upi_transactions" 
+                               placeholder="e.g., 50" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="digital_vs_cash">Digital vs Cash</label>
+                        <select id="digital_vs_cash" name="digital_vs_cash" required>
+                            <option value="">Select...</option>
+                            <option value="mostly digital">Mostly Digital</option>
+                            <option value="mixed">Mixed</option>
+                            <option value="mostly cash">Mostly Cash</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="upi_file">Upload UPI Statement (Optional - CSV or PDF)</label>
+                    <input type="file" id="upi_file" name="upi_file" accept=".csv,.pdf">
+                    <div class="file-info">Upload Google Pay, PhonePe, or Paytm statement</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">E) Lifestyle & Behavioral Questions</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="tracks_expenses">Do you track expenses?</label>
+                        <select id="tracks_expenses" name="tracks_expenses" required>
+                            <option value="">Select...</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="overspends_often">Do you overspend often?</label>
+                        <select id="overspends_often" name="overspends_often" required>
+                            <option value="">Select...</option>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="sudden_big_expenses">Sudden Big Expenses</label>
+                    <select id="sudden_big_expenses" name="sudden_big_expenses" required>
+                        <option value="">Select...</option>
+                        <option value="often">Often</option>
+                        <option value="rarely">Rarely</option>
+                        <option value="never">Never</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary">Calculate InsightScore</button>
+        </form>
+
+        <a href="{{ url_for('check') }}" class="back-link">← Back</a>
+    </div>
+</body>
+</html>
+
