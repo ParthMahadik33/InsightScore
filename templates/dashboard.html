@@ -299,6 +299,36 @@
             </form>
         </div>
 
+        <!-- Notifications -->
+        {% if notifications %}
+        <div class="card">
+            <h3>Notifications {% if unread_count > 0 %}<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px;">{{ unread_count }} new</span>{% endif %}</h3>
+            <div class="loan-requests-list">
+                {% for notification in notifications %}
+                <div class="loan-request-item" style="{% if notification.is_read == 0 %}background: #eff6ff; border-left: 4px solid var(--primary);{% endif %}">
+                    <div style="flex: 1;">
+                        <strong style="display: block; margin-bottom: 4px;">{{ notification.message }}</strong>
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            {{ notification.created_at }}
+                            {% if notification.lender_name %}
+                            • From: {{ notification.lender_name }}
+                            {% endif %}
+                        </div>
+                        {% if notification.notification_type == 'score_request' and not latest_verified_score %}
+                        <a href="{{ url_for('verified_score_upload') }}" class="btn btn-primary" style="margin-top: 8px; padding: 6px 12px; font-size: 12px;">Upload Documents Now</a>
+                        {% endif %}
+                    </div>
+                    {% if notification.is_read == 0 %}
+                    <form method="post" action="{{ url_for('mark_notification_read', notification_id=notification.id) }}" style="display: inline;">
+                        <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Mark Read</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Loan Requests List -->
         {% if loan_requests %}
         <div class="card">

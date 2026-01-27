@@ -186,6 +186,23 @@ def init_db(app: Flask) -> None:
             """
         )
         
+        # Create notifications table
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lender_id INTEGER,
+                notification_type TEXT NOT NULL,
+                message TEXT NOT NULL,
+                is_read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                FOREIGN KEY (lender_id) REFERENCES lenders (id)
+            )
+            """
+        )
+        
         # Keep old scores table for backward compatibility (will migrate data later)
         conn.execute(
             """
@@ -845,6 +862,24 @@ def dashboard():
             (session["user_id"],)
         )
         loan_requests = cur.fetchall()
+        
+        # Get unread notifications
+        cur = conn.execute(
+            """SELECT n.id, n.notification_type, n.message, n.created_at, n.is_read, l.name as lender_name, l.org_name
+               FROM notifications n
+               LEFT JOIN lenders l ON n.lender_id = l.id
+               WHERE n.user_id = ? ORDER BY n.created_at DESC LIMIT 10""",
+            (session["user_id"],)
+        )
+        notifications = cur.fetchall()
+        
+        # Count unread notifications
+        cur = conn.execute(
+            "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0",
+            (session["user_id"],)
+        )
+        unread_result = cur.fetchone()
+        unread_count = unread_result["count"] if unread_result else 0
     
     return render_template("dashboard.html", 
                          username=session.get("username"),
@@ -853,6 +888,8 @@ def dashboard():
                          latest_verified_score=latest_verified_score,
                          quick_score_history=quick_score_history,
                          loan_requests=loan_requests,
+                         notifications=notifications,
+                         unread_count=unread_count,
                          loan_types=LOAN_TYPES)
 
 @app.route("/check", methods=["GET", "POST"])
@@ -1258,8 +1295,29 @@ def lender_search_user():
                 verified_score = cur.fetchone()
                 
                 if not verified_score:
-                    flash("User has not generated a verified score. Ask user to upload official documents.", "error")
-                    return redirect(url_for("lender_search_user"))
+                    # Send notification to user
+                    lender_name = session.get("username", "A lender")
+                    conn.execute(
+                        """INSERT INTO notifications (user_id, lender_id, notification_type, message)
+                           VALUES (?, ?, ?, ?)""",
+                        (user["id"], session["lender_id"], "score_request",
+                         f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.")
+                    )
+                    conn.commit()
+                    
+                    # Get lender info for display
+                    cur = conn.execute(
+                        "SELECT name, org_name FROM lenders WHERE id = ?",
+                        (session["lender_id"],)
+                    )
+                    lender_info = cur.fetchone()
+                    
+                    return render_template("lender_user_no_score.html",
+                                         user=user,
+                                         lender_info=lender_info,
+                                         loan_type=loan_type,
+                                         request_id=request_id,
+                                         loan_types=LOAN_TYPES)
                 
                 # Get loan request if request_id provided
                 loan_request = None
@@ -1325,8 +1383,29 @@ def lender_search_user():
             verified_score = cur.fetchone()
             
             if not verified_score:
-                flash("User has not generated a verified score. Ask user to upload official documents.", "error")
-                return redirect(url_for("lender_search_user"))
+                # Send notification to user
+                lender_name = session.get("username", "A lender")
+                conn.execute(
+                    """INSERT INTO notifications (user_id, lender_id, notification_type, message)
+                       VALUES (?, ?, ?, ?)""",
+                    (user["id"], session["lender_id"], "score_request",
+                     f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.")
+                )
+                conn.commit()
+                
+                # Get lender info for display
+                cur = conn.execute(
+                    "SELECT name, org_name FROM lenders WHERE id = ?",
+                    (session["lender_id"],)
+                )
+                lender_info = cur.fetchone()
+                
+                return render_template("lender_user_no_score.html",
+                                     user=user,
+                                     lender_info=lender_info,
+                                     loan_type=loan_type,
+                                     request_id=None,
+                                     loan_types=LOAN_TYPES)
             
             # Parse verified score data
             cibil_json = json.loads(verified_score["cibil_json"]) if verified_score["cibil_json"] else {}
@@ -1338,7 +1417,7 @@ def lender_search_user():
             # Calculate loan-type-specific score
             loan_decision = None
             if loan_type:
-                loan_decision = calculate_loan_type_score(behavior_json, loan_type, cibil_json.get("cibil_score"))
+                loan_decision = calculate_loan_type_score(behavior_json, loan_type, cibil_json.get("cibil_score"), salary_json)
             
             return render_template("lender_user_score.html",
                                  user=user,
@@ -1353,7 +1432,23 @@ def lender_search_user():
                                  loan_request=None,
                                  loan_types=LOAN_TYPES)
     
-    return render_template("lender_search_user.html", loan_types=LOAN_TYPES)
+    # Check if user_id is provided in GET request for display
+    user_id = request.args.get("user_id")
+    user_info = None
+    loan_type_param = request.args.get("loan_type", "")
+    
+    if user_id:
+        with get_db(app) as conn:
+            cur = conn.execute(
+                "SELECT id, username, unique_user_id FROM users WHERE unique_user_id = ?",
+                (user_id.upper(),)
+            )
+            user_info = cur.fetchone()
+    
+    return render_template("lender_search_user.html", 
+                         loan_types=LOAN_TYPES,
+                         user_info=user_info,
+                         loan_type=loan_type_param)
 
 @app.route("/lender/approve-loan/<int:request_id>", methods=["POST"])
 def lender_approve_loan(request_id):
@@ -1381,6 +1476,21 @@ def lender_approve_loan(request_id):
     
     flash(f"Loan request {status} successfully!", "success")
     return redirect(url_for("lender_dashboard"))
+
+@app.route("/notifications/mark-read/<int:notification_id>", methods=["POST"])
+def mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    if "user_id" not in session or session.get("role") != "user":
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    with get_db(app) as conn:
+        conn.execute(
+            "UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?",
+            (notification_id, session["user_id"])
+        )
+        conn.commit()
+    
+    return jsonify({"success": True})
 
 @app.route("/logout")
 def logout():

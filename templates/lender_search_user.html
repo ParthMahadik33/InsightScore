@@ -110,7 +110,7 @@
         </div>
 
         <div class="card">
-            <form method="post" action="{{ url_for('lender_search_user') }}">
+            <form method="post" action="{{ url_for('lender_search_user') }}" id="searchForm">
                 <div class="form-group">
                     <label for="unique_user_id">User Unique ID (e.g., USR-XXXX)</label>
                     <input type="text" id="unique_user_id" name="unique_user_id" placeholder="USR-XXXX" required style="text-transform: uppercase;">
@@ -126,9 +126,29 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Search User</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Search User & Check Score</button>
             </form>
         </div>
+
+        <!-- User Info Display (if searched via GET) -->
+        {% if user_info %}
+        <div class="card" style="margin-top: 24px;">
+            <h3>User Found</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px;">
+                <div style="padding: 16px; background: var(--bg-soft); border-radius: 12px;">
+                    <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">User ID</label>
+                    <strong>{{ user_info.unique_user_id }}</strong>
+                </div>
+                <div style="padding: 16px; background: var(--bg-soft); border-radius: 12px;">
+                    <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Username</label>
+                    <strong>{{ user_info.username }}</strong>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <a href="{{ url_for('lender_search_user') }}?user_id={{ user_info.unique_user_id }}{% if loan_type %}&loan_type={{ loan_type }}{% endif %}" class="btn btn-primary" style="width: 100%;">Check Verified Score</a>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </body>
 </html>

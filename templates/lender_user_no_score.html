@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Not Found - InsightScore</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #035fdf;
+            --accent: #00c896;
+            --bg-soft: #f5f7fb;
+            --text-main: #07111f;
+            --text-muted: #5f6b80;
+            --card-bg: #ffffff;
+            --shadow: 0 18px 45px rgba(15, 35, 52, 0.12);
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Inter", system-ui, sans-serif;
+            background-image: url("{{ url_for('static', filename='assets/bg.png') }}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 32px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #0481ff);
+            color: white;
+            box-shadow: 0 4px 12px rgba(3, 95, 223, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-soft);
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            margin-bottom: 24px;
+        }
+
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid var(--warning);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .warning-box h3 {
+            color: #92400e;
+            margin-bottom: 8px;
+        }
+
+        .warning-box p {
+            color: #78350f;
+            margin: 0;
+        }
+
+        .success-box {
+            background: #d1fae5;
+            border-left: 4px solid #22c55e;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .success-box h3 {
+            color: #065f46;
+            margin-bottom: 8px;
+        }
+
+        .success-box p {
+            color: #047857;
+            margin: 0;
+        }
+
+        .user-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .info-item {
+            padding: 16px;
+            background: var(--bg-soft);
+            border-radius: 12px;
+        }
+
+        .info-item label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .info-item strong {
+            font-size: 16px;
+            color: var(--text-main);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>User Found</h1>
+                <p style="color: var(--text-muted); margin-top: 4px;">User: {{ user.unique_user_id }} ({{ user.username }})</p>
+            </div>
+            <a href="{{ url_for('lender_search_user') }}" class="btn btn-secondary">Search Another User</a>
+        </div>
+
+        <div class="card">
+            <div class="warning-box">
+                <h3>⚠️ Verified Score Not Available</h3>
+                <p>This user has not generated a verified score yet. They need to upload official documents (Bank Statement, CIBIL Report, UPI Transactions, Salary Slip) to generate their verified score.</p>
+            </div>
+
+            <div class="success-box">
+                <h3>✅ Notification Sent</h3>
+                <p>A notification has been sent to the user informing them that a lender is trying to check their verified score. They will be prompted to upload their documents.</p>
+            </div>
+
+            <div class="user-info">
+                <div class="info-item">
+                    <label>User ID</label>
+                    <strong>{{ user.unique_user_id }}</strong>
+                </div>
+                <div class="info-item">
+                    <label>Username</label>
+                    <strong>{{ user.username }}</strong>
+                </div>
+                {% if lender_info %}
+                <div class="info-item">
+                    <label>Requested By</label>
+                    <strong>{{ lender_info.name }}</strong>
+                    {% if lender_info.org_name %}
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">{{ lender_info.org_name }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if loan_type %}
+                <div class="info-item">
+                    <label>Loan Type</label>
+                    <strong>{{ loan_type|title }}</strong>
+                </div>
+                {% endif %}
+            </div>
+
+            <div style="margin-top: 24px; padding: 20px; background: var(--bg-soft); border-radius: 12px;">
+                <h3 style="margin-bottom: 12px;">What happens next?</h3>
+                <ol style="padding-left: 20px; color: var(--text-muted);">
+                    <li style="margin-bottom: 8px;">The user will receive a notification about your request</li>
+                    <li style="margin-bottom: 8px;">They will be prompted to upload their official documents</li>
+                    <li style="margin-bottom: 8px;">Once they upload documents, their verified score will be generated</li>
+                    <li>You can check back later to view their verified score</li>
+                </ol>
+            </div>
+
+            <div style="margin-top: 24px; text-align: center;">
+                <a href="{{ url_for('lender_search_user') }}?user_id={{ user.unique_user_id }}{% if loan_type %}&loan_type={{ loan_type }}{% endif %}{% if request_id %}&request_id={{ request_id }}{% endif %}" class="btn btn-primary">Check Score Again Later</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
