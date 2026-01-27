@@ -30,6 +30,7 @@
             background-attachment: fixed;
             min-height: 100vh;
             padding: 24px;
+            padding-bottom: 80px; /* Space for bottom nav on mobile */
         }
 
         .container {
@@ -128,6 +129,125 @@
             color: var(--text-muted);
             font-size: 12px;
         }
+
+        /* Mobile Bottom Navigation Bar */
+        .bottom-nav {
+            display: none;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+                padding-bottom: 80px; /* Space for bottom nav */
+            }
+
+            .container {
+                max-width: 100%;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+                padding: 16px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .header > div:last-child {
+                display: none; /* Hide header actions on mobile */
+            }
+
+            /* Show bottom navigation */
+            .bottom-nav {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.98);
+                backdrop-filter: blur(20px);
+                border-top: 1px solid rgba(0, 0, 0, 0.1);
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+                z-index: 1000;
+                padding: 8px 0;
+                justify-content: space-around;
+                align-items: center;
+            }
+
+            .bottom-nav-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 8px 16px;
+                text-decoration: none;
+                color: var(--text-muted);
+                font-size: 11px;
+                font-weight: 500;
+                transition: all 0.2s;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .bottom-nav-item.active {
+                color: var(--primary);
+            }
+
+            .bottom-nav-item .icon {
+                font-size: 20px;
+                margin-bottom: 4px;
+            }
+
+            .bottom-nav-item .label {
+                font-size: 11px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .card h3 {
+                font-size: 18px;
+            }
+
+            .request-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .request-item .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
+
+            .header {
+                padding: 12px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .btn {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -147,6 +267,26 @@
                 <a href="{{ url_for('logout') }}" class="btn btn-secondary">Sign Out</a>
             </div>
         </div>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav class="bottom-nav">
+            <a href="{{ url_for('lender_dashboard') }}" class="bottom-nav-item active">
+                <span class="icon">🏠</span>
+                <span class="label">Dashboard</span>
+            </a>
+            <a href="{{ url_for('lender_search_user') }}" class="bottom-nav-item">
+                <span class="icon">🔍</span>
+                <span class="label">Search</span>
+            </a>
+            <a href="{{ url_for('lender_edit_loan_types') }}" class="bottom-nav-item">
+                <span class="icon">⚙️</span>
+                <span class="label">Settings</span>
+            </a>
+            <a href="{{ url_for('logout') }}" class="bottom-nav-item">
+                <span class="icon">🚪</span>
+                <span class="label">Logout</span>
+            </a>
+        </nav>
 
         <div class="grid">
             <div class="card">

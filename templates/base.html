@@ -62,6 +62,54 @@
         }
       }
 
+      @media (max-width: 768px) {
+        body {
+          padding: 16px;
+          padding-bottom: 16px; /* No bottom nav on login pages */
+        }
+
+        .auth-shell {
+          margin: 16px 8px;
+          margin-bottom: 16px; /* Ensure no overlap */
+        }
+
+        .auth-main {
+          padding: 24px 20px;
+          margin-bottom: 16px; /* Extra space at bottom */
+        }
+
+        .auth-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .field-input input {
+          font-size: 16px; /* Prevents zoom on iOS */
+        }
+      }
+
+      @media (max-width: 480px) {
+        body {
+          padding: 12px;
+          padding-bottom: 12px; /* No bottom nav on login pages */
+        }
+
+        .auth-shell {
+          margin: 12px 4px;
+          margin-bottom: 12px;
+        }
+
+        .auth-main {
+          padding: 20px 16px;
+          margin-bottom: 12px;
+        }
+
+        .auth-body h2 {
+          font-size: 20px;
+        }
+      }
+
       .auth-visual {
         position: relative;
         overflow: visible;

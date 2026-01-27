@@ -82,9 +82,92 @@
             margin-bottom: 16px;
         }
 
-        @media (max-width: 640px) {
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+                padding-bottom: 80px; /* Space for bottom nav */
+            }
+
+            .container {
+                padding: 24px;
+            }
+
+            /* Show bottom navigation */
+            .bottom-nav {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.98);
+                backdrop-filter: blur(20px);
+                border-top: 1px solid rgba(0, 0, 0, 0.1);
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+                z-index: 1000;
+                padding: 8px 0;
+                justify-content: space-around;
+                align-items: center;
+            }
+
+            .bottom-nav-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 8px 16px;
+                text-decoration: none;
+                color: var(--text-muted);
+                font-size: 11px;
+                font-weight: 500;
+                transition: all 0.2s;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .bottom-nav-item.active {
+                color: var(--primary);
+            }
+
+            .bottom-nav-item .icon {
+                font-size: 20px;
+                margin-bottom: 4px;
+            }
+
+            .bottom-nav-item .label {
+                font-size: 11px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .section-title {
+                font-size: 16px;
+            }
+
             .form-row {
                 grid-template-columns: 1fr;
+            }
+
+            .form-group input[type="number"],
+            .form-group select,
+            .form-group input[type="file"] {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
+
+            .container {
+                padding: 16px;
+            }
+
+            .header h1 {
+                font-size: 20px;
             }
         }
 
@@ -294,6 +377,26 @@
 
         <a href="{{ url_for('check') }}" class="back-link">← Back</a>
     </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="{{ url_for('dashboard') }}" class="bottom-nav-item">
+            <span class="icon">🏠</span>
+            <span class="label">Home</span>
+        </a>
+        <a href="{{ url_for('check') }}" class="bottom-nav-item active">
+            <span class="icon">⚡</span>
+            <span class="label">Quick Score</span>
+        </a>
+        <a href="{{ url_for('verified_score_upload') }}" class="bottom-nav-item">
+            <span class="icon">📄</span>
+            <span class="label">Verified</span>
+        </a>
+        <a href="{{ url_for('logout') }}" class="bottom-nav-item">
+            <span class="icon">🚪</span>
+            <span class="label">Logout</span>
+        </a>
+    </nav>
 </body>
 </html>
 
