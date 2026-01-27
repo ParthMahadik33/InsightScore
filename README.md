@@ -28,18 +28,14 @@ A FinTech web application that combines traditional CIBIL scores with AI-powered
 pip install -r requirements.txt
 ```
 
-2. Set up environment (optional):
-```bash
-export SECRET_KEY="your-secret-key-here"
-export PORT=5000
-```
 
-3. Run the application:
+
+2. Run the application:
 ```bash
 python app.py
 ```
 
-4. Access the app at `http://localhost:5000`
+3. Access the app at `http://localhost:5000`
 
 ## Usage Flow
 
