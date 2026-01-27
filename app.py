@@ -1251,6 +1251,31 @@ def lender_dashboard():
                ORDER BY lr.created_at DESC LIMIT 20""",
         )
         pending_requests = cur.fetchall()
+        
+        # Get approved loans history (loans approved by this lender)
+        cur = conn.execute(
+            """SELECT lr.id, lr.user_id, lr.loan_type, lr.status, lr.decision_json, lr.created_at, 
+                      u.unique_user_id, u.username
+               FROM loan_requests lr
+               JOIN users u ON lr.user_id = u.id
+               WHERE lr.lender_id = ? AND lr.status = 'approved'
+               ORDER BY lr.created_at DESC LIMIT 50""",
+            (session["lender_id"],)
+        )
+        approved_loans_raw = cur.fetchall()
+        
+        # Parse decision_json for each loan
+        approved_loans = []
+        for loan in approved_loans_raw:
+            loan_dict = dict(loan)
+            if loan_dict["decision_json"]:
+                try:
+                    loan_dict["decision"] = json.loads(loan_dict["decision_json"])
+                except:
+                    loan_dict["decision"] = None
+            else:
+                loan_dict["decision"] = None
+            approved_loans.append(loan_dict)
     
     loan_types_offered = json.loads(lender["loan_types_offered"]) if lender["loan_types_offered"] else []
     
@@ -1259,6 +1284,7 @@ def lender_dashboard():
                          org_name=lender["org_name"],
                          loan_types_offered=loan_types_offered,
                          pending_requests=pending_requests,
+                         approved_loans=approved_loans,
                          loan_types=LOAN_TYPES)
 
 @app.route("/lender/search-user", methods=["GET", "POST"])
@@ -1433,6 +1459,40 @@ def lender_search_user():
                          loan_types=LOAN_TYPES,
                          user_info=user_info)
 
+@app.route("/lender/edit-loan-types", methods=["GET", "POST"])
+def lender_edit_loan_types():
+    """Lender edits loan types they offer"""
+    if "lender_id" not in session or session.get("role") != "lender":
+        return redirect(url_for("signin"))
+    
+    if request.method == "POST":
+        loan_types = request.form.getlist("loan_types")
+        loan_types_json = json.dumps(loan_types) if loan_types else "[]"
+        
+        with get_db(app) as conn:
+            conn.execute(
+                "UPDATE lenders SET loan_types_offered = ? WHERE id = ?",
+                (loan_types_json, session["lender_id"])
+            )
+            conn.commit()
+        
+        flash("Loan types updated successfully!", "success")
+        return redirect(url_for("lender_dashboard"))
+    
+    # GET request - show edit form
+    with get_db(app) as conn:
+        cur = conn.execute(
+            "SELECT loan_types_offered FROM lenders WHERE id = ?",
+            (session["lender_id"],)
+        )
+        lender = cur.fetchone()
+    
+    current_loan_types = json.loads(lender["loan_types_offered"]) if lender["loan_types_offered"] else []
+    
+    return render_template("lender_edit_loan_types.html",
+                         current_loan_types=current_loan_types,
+                         all_loan_types=LOAN_TYPES)
+
 @app.route("/lender/approve-loan/<int:request_id>", methods=["POST"])
 def lender_approve_loan(request_id):
     """Lender approves a loan request"""
@@ -1456,6 +1516,7 @@ def lender_approve_loan(request_id):
             """UPDATE loan_requests SET lender_id = ?, status = ?, decision_json = ? WHERE id = ?""",
             (session["lender_id"], status, json.dumps(decision_json), request_id)
         )
+        conn.commit()
     
     flash(f"Loan request {status} successfully!", "success")
     return redirect(url_for("lender_dashboard"))

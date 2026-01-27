@@ -156,7 +156,10 @@
             </div>
 
             <div class="card">
-                <h3>Loan Types Offered</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0;">Loan Types Offered</h3>
+                    <a href="{{ url_for('lender_edit_loan_types') }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</a>
+                </div>
                 <div style="margin-top: 16px;">
                     {% if loan_types_offered %}
                         {% for loan_type in loan_types_offered %}
@@ -183,6 +186,27 @@
                         <small style="display: block; margin-top: 4px;">Requested: {{ request.created_at }}</small>
                     </div>
                     <a href="{{ url_for('lender_search_user') }}?user_id={{ request.unique_user_id }}&request_id={{ request.id }}&loan_type={{ request.loan_type }}" class="btn btn-primary">View Score & Decide</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if approved_loans %}
+        <div class="card">
+            <h3>Approved Loans History</h3>
+            <div style="margin-top: 20px;">
+                {% for loan in approved_loans %}
+                <div class="request-item" style="background: #d1fae5; border-left: 4px solid #22c55e;">
+                    <div class="request-info">
+                        <strong>{{ loan.loan_type|title }} Loan - Approved</strong>
+                        <small>User: {{ loan.unique_user_id }} ({{ loan.username }})</small>
+                        <small style="display: block; margin-top: 4px;">Approved: {{ loan.created_at }}</small>
+                        {% if loan.decision and loan.decision.notes %}
+                        <small style="display: block; margin-top: 4px; color: var(--text-muted);">Notes: {{ loan.decision.notes }}</small>
+                        {% endif %}
+                    </div>
+                    <span style="padding: 6px 12px; background: #22c55e; color: white; border-radius: 8px; font-size: 12px; font-weight: 600;">Approved</span>
                 </div>
                 {% endfor %}
             </div>
