@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block switch %}
+<a href="{{ url_for('logout') }}">Sign out</a>
+{% endblock %}
+
+{% block heading %}Hi {{ username }}{% endblock %}
+{% block subheading %}You are signed in successfully.{% endblock %}
+
+{% block form %}
+<div class="field-helper">
+  This is a simple placeholder dashboard. You can customize this page with your
+  own content.
+</div>
+{% endblock %}
+

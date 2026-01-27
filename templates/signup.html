@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Sign up{% endblock %}
+
+{% block switch %}
+Already have an account?
+<a href="{{ url_for('signin') }}">Sign in</a>
+{% endblock %}
+
+{% block heading %}Create your account{% endblock %}
+{% block subheading %}It only takes a moment to get started.{% endblock %}
+
+{% block form %}
+<form method="post" action="{{ url_for('signup') }}">
+  <div class="field-group">
+    <label for="username">Name</label>
+    <div class="field-input">
+      <input
+        type="text"
+        id="username"
+        name="username"
+        placeholder="Jane Doe"
+        required
+        autocomplete="name"
+      />
+    </div>
+  </div>
+
+  <div class="field-group">
+    <label for="email">Email</label>
+    <div class="field-input">
+      <input
+        type="email"
+        id="email"
+        name="email"
+        placeholder="you@example.com"
+        required
+        autocomplete="email"
+      />
+    </div>
+  </div>
+
+  <div class="field-group">
+    <label for="password">Password</label>
+    <div class="field-input">
+      <input
+        type="password"
+        id="password"
+        name="password"
+        placeholder="Create a password"
+        required
+        minlength="6"
+        autocomplete="new-password"
+      />
+    </div>
+  </div>
+
+  <div class="field-group">
+    <label for="confirm_password">Confirm password</label>
+    <div class="field-input">
+      <input
+        type="password"
+        id="confirm_password"
+        name="confirm_password"
+        placeholder="Repeat your password"
+        required
+        minlength="6"
+        autocomplete="new-password"
+      />
+    </div>
+    <div class="field-helper">
+      Passwords should be at least 6 characters for better security.
+    </div>
+  </div>
+
+  <div class="auth-footer-row">
+    <div class="remember">
+      <input
+        type="checkbox"
+        id="terms"
+        required
+        style="accent-color: #4f46e5; width: 14px; height: 14px"
+      />
+      <label for="terms">I agree to the terms</label>
+    </div>
+
+    <button type="submit" class="submit-btn">
+      <span>Create account</span>
+    </button>
+  </div>
+
+  <div class="divider">
+    <span></span>
+    Or
+    <span></span>
+  </div>
+
+  <div class="field-helper">
+    Already registered?
+    <a href="{{ url_for('signin') }}" style="color: #1d4ed8; text-decoration: none"
+      >Sign in instead</a
+    >.
+  </div>
+</form>
+{% endblock %}
+

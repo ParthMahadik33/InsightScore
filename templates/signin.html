@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block switch %}
+New here?
+<a href="{{ url_for('signup') }}">Create an account</a>
+{% endblock %}
+
+{% block heading %}Welcome back{% endblock %}
+{% block subheading %}Sign in to continue where you left off.{% endblock %}
+
+{% block form %}
+<form method="post" action="{{ url_for('signin') }}">
+  <div class="field-group">
+    <label for="email">Email</label>
+    <div class="field-input">
+      <input
+        type="email"
+        id="email"
+        name="email"
+        placeholder="you@example.com"
+        required
+        autocomplete="email"
+      />
+    </div>
+  </div>
+
+  <div class="field-group">
+    <label for="password">Password</label>
+    <div class="field-input">
+      <input
+        type="password"
+        id="password"
+        name="password"
+        placeholder="••••••••"
+        required
+        autocomplete="current-password"
+      />
+    </div>
+    <div class="field-helper">Use the password you created when you signed up.</div>
+  </div>
+
+  <div class="auth-footer-row">
+    <button type="submit" class="submit-btn">
+      <span>Sign in</span>
+    </button>
+  </div>
+
+  <div class="divider">
+    <span></span>
+    Or
+    <span></span>
+  </div>
+
+  <div class="field-helper">
+    Need an account?
+    <a href="{{ url_for('signup') }}" style="color: #1d4ed8; text-decoration: none"
+      >Sign up instead</a
+    >.
+  </div>
+</form>
+{% endblock %}
+
