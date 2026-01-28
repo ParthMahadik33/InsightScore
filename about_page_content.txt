@@ -1,0 +1,270 @@
+ABOUT PAGE CONTENT FOR INSIGHTSCORE
+
+================================================================================
+ABOUT INSIGHTSCORE
+================================================================================
+
+Welcome to InsightScore - Your trusted partner in understanding creditworthiness through innovative AI-powered financial analysis.
+
+InsightScore is a revolutionary FinTech platform that combines traditional credit bureau scores (CIBIL) with advanced behavioral analysis to provide you with a comprehensive, accurate, and fair credit assessment. We believe that your creditworthiness should reflect not just your past credit history, but also your current financial behavior and discipline.
+
+================================================================================
+OUR MISSION
+================================================================================
+
+To democratize credit assessment by providing transparent, fair, and comprehensive credit scoring that goes beyond traditional metrics. We aim to help individuals understand their financial health better and enable lenders to make more informed decisions.
+
+================================================================================
+WHAT MAKES US DIFFERENT
+================================================================================
+
+1. HYBRID SCORING APPROACH
+   Traditional credit scores only look at your credit history. InsightScore combines:
+   - CIBIL Score (40%): Your traditional credit bureau score
+   - Behavioral Score (60%): AI-analyzed financial behavior patterns
+   
+   This gives a more complete picture of your creditworthiness.
+
+2. AI-POWERED ANALYSIS
+   We use Google's Gemini AI to analyze your financial behavior across six key dimensions:
+   - Income Stability: How consistent and reliable your income is
+   - Spending Discipline: Your ability to control expenses
+   - Savings Behavior: Your savings patterns and financial cushion
+   - Payment Discipline: Your track record of paying bills on time
+   - Digital Behavior: Your adoption of digital payment methods
+   - Lifestyle Stability: Your financial stability and predictability
+
+3. DOCUMENT-BASED VERIFICATION
+   For the most accurate score, upload your official documents:
+   - CIBIL Credit Report
+   - Bank Statements
+   - UPI Transaction History
+   - Salary Slips
+   
+   Our system extracts key metrics and provides verified behavioral analysis.
+
+4. PRIVACY FIRST
+   - All documents are processed locally
+   - Files are deleted immediately after analysis
+   - No raw document data is sent to AI models
+   - Only structured metrics are analyzed
+   - Your data is secure and private
+
+5. FREE & NO CREDIT IMPACT
+   - Check your InsightScore completely free
+   - No impact on your credit score
+   - No hidden charges
+   - Instant results
+
+================================================================================
+HOW IT WORKS
+================================================================================
+
+STEP 1: QUICK SCORE (Self-Reported)
+   - Enter your CIBIL score (or upload CIBIL PDF)
+   - Fill out a simple behavioral questionnaire
+   - Optionally upload UPI transaction data
+   - Get instant behavioral analysis and hybrid score
+
+STEP 2: VERIFIED SCORE (Document-Based) - Recommended
+   - Upload your official financial documents
+   - Our system extracts key metrics automatically
+   - AI analyzes your verified financial behavior
+   - Receive comprehensive score with detailed insights
+
+STEP 3: UNDERSTAND YOUR SCORE
+   - View detailed breakdown of all six behavioral components
+   - See what's helping and hurting your score
+   - Get personalized improvement tips
+   - Track your score over time
+
+STEP 4: USE YOUR SCORE
+   - Request loans from verified lenders
+   - Share your verified score with lenders
+   - Get better loan terms with higher scores
+   - Improve your financial health
+
+================================================================================
+SCORING METHODOLOGY
+================================================================================
+
+BEHAVIORAL SCORE COMPONENTS:
+
+1. Income Stability (15% weight)
+   Measures the consistency and reliability of your income sources.
+
+2. Spending Discipline (20% weight)
+   Evaluates how well you manage expenses relative to income.
+
+3. Savings Behavior (20% weight)
+   Assesses your ability to save and build financial reserves.
+
+4. Payment Discipline (25% weight) - Most Important
+   Tracks your history of paying bills and obligations on time.
+
+5. Digital Behavior (10% weight)
+   Analyzes your adoption of digital payment methods and transaction patterns.
+
+6. Lifestyle Stability (10% weight)
+   Measures financial predictability and stability in spending patterns.
+
+FINAL SCORE:
+Your InsightScore combines your CIBIL score (if available) with your behavioral score to give you a comprehensive credit assessment ranging from 300-900, similar to traditional credit scores but more complete.
+
+================================================================================
+FEATURES
+================================================================================
+
+FOR USERS:
+✓ Free credit score checking
+✓ Quick Score: Fast behavioral analysis
+✓ Verified Score: Document-based comprehensive analysis
+✓ Score history tracking
+✓ Loan request submission
+✓ Real-time notifications
+✓ WhatsApp reminders
+✓ Secure document processing
+✓ Privacy-first approach
+
+FOR LENDERS:
+✓ Search users by unique ID
+✓ View verified scores
+✓ Loan-type-specific risk assessment
+✓ Approve/reject loan requests
+✓ Loan history tracking
+✓ Customizable loan offerings
+
+================================================================================
+SECURITY & PRIVACY
+================================================================================
+
+Your privacy and security are our top priorities:
+
+🔒 SECURE PROCESSING
+   - All documents are processed securely
+   - Files are deleted immediately after analysis
+   - No long-term storage of sensitive data
+
+🔒 DATA PROTECTION
+   - Passwords are encrypted using industry-standard hashing
+   - Session-based authentication
+   - Secure API communications
+
+🔒 PRIVACY BY DESIGN
+   - No raw document text sent to AI models
+   - Only structured metrics are analyzed
+   - Your personal information is protected
+   - Document content hashing for verification
+
+🔒 TRANSPARENCY
+   - Clear explanation of how scores are calculated
+   - Detailed breakdown of all score components
+   - No hidden algorithms or black boxes
+
+================================================================================
+TECHNOLOGY
+================================================================================
+
+InsightScore is built using cutting-edge technology:
+
+- AI/ML: Google Gemini AI for behavioral analysis
+- Backend: Flask (Python) for robust server-side processing
+- Database: SQLite for secure data storage
+- Document Processing: Advanced PDF and CSV parsing
+- Security: Industry-standard encryption and hashing
+- Architecture: Optimized for speed and efficiency
+
+Our system is designed to:
+- Process documents locally (no raw data to cloud)
+- Extract only necessary metrics
+- Provide fast, accurate scoring
+- Scale efficiently
+
+================================================================================
+WHO WE SERVE
+================================================================================
+
+INDIVIDUALS:
+   - Anyone wanting to understand their creditworthiness
+   - People looking to improve their credit score
+   - Individuals seeking loans
+   - Financial health enthusiasts
+
+LENDERS:
+   - Banks and financial institutions
+   - NBFCs (Non-Banking Financial Companies)
+   - FinTech companies
+   - Loan providers
+
+================================================================================
+FREQUENTLY ASKED QUESTIONS
+================================================================================
+
+Q: Is InsightScore free?
+A: Yes, checking your InsightScore is completely free with no hidden charges.
+
+Q: Will checking my score affect my credit rating?
+A: No, checking your InsightScore has zero impact on your credit score.
+
+Q: How accurate is InsightScore?
+A: Verified Score (with documents) provides the most accurate assessment. Quick Score (self-reported) gives a good estimate.
+
+Q: What documents do I need?
+A: For Verified Score, you can upload: CIBIL report, Bank statement, UPI transactions, and Salary slip. All are optional but more documents = more accurate score.
+
+Q: How is my data protected?
+A: All documents are deleted immediately after processing. Only structured metrics are analyzed. We follow industry-standard security practices.
+
+Q: Can lenders see my score?
+A: Only if you share your unique user ID with them. You have full control over who can view your verified score.
+
+Q: How often should I check my score?
+A: We recommend checking monthly to track improvements. Our system sends reminders every 30 days.
+
+Q: What's the difference between Quick Score and Verified Score?
+A: Quick Score uses self-reported data for fast analysis. Verified Score uses official documents for more accurate, comprehensive assessment.
+
+================================================================================
+GETTING STARTED
+================================================================================
+
+Ready to discover your InsightScore? It's easy:
+
+1. Sign up for a free account
+2. Choose Quick Score (fast) or Verified Score (comprehensive)
+3. Provide your information or upload documents
+4. Get your score instantly
+5. View detailed insights and improvement tips
+
+Start your journey to better financial health today!
+
+================================================================================
+CONTACT & SUPPORT
+================================================================================
+
+Need help? We're here for you:
+- Check your dashboard for score details
+- Review our FAQ section
+- Contact support through the platform
+
+================================================================================
+TERMS & CONDITIONS
+================================================================================
+
+- InsightScore is a credit assessment tool, not a credit bureau
+- Scores are for informational purposes
+- Lenders may use additional criteria for loan decisions
+- We are not responsible for loan approval/rejection decisions
+- All data processing follows privacy regulations
+
+================================================================================
+VERSION INFORMATION
+================================================================================
+
+Platform: InsightScore v3
+Last Updated: 2026
+Technology: AI-Powered Hybrid Credit Scoring
+
+================================================================================
+END OF ABOUT PAGE CONTENT
+================================================================================
