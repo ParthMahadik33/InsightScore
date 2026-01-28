@@ -1441,103 +1441,134 @@ def lender_search_user():
     if "lender_id" not in session or session.get("role") != "lender":
         return redirect(url_for("signin"))
     
-    # Handle GET request with user_id parameter (from pending requests)
+    # Handle GET request with user_id parameter (from pending requests / deep links)
     if request.method == "GET":
         user_id = request.args.get("user_id")
         request_id = request.args.get("request_id")
         if user_id:
             unique_user_id = user_id.upper()
-            loan_type = request.args.get("loan_type", "")
-            
+            loan_type = request.args.get("loan_type", "") or None
+
             with get_db(app) as conn:
                 # Find user
                 cur = conn.execute(
                     "SELECT id, username, unique_user_id FROM users WHERE unique_user_id = ?",
-                    (unique_user_id,)
+                    (unique_user_id,),
                 )
                 user = cur.fetchone()
-                
                 if not user:
                     flash("User not found.", "error")
                     return redirect(url_for("lender_search_user"))
-                
-            # Get verified score
-            cur = conn.execute(
-                "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
-                (user["id"],)
-            )
-            verified_score = cur.fetchone()
-            
-            if not verified_score:
-                # Send notification to user
-                lender_name = session.get("username", "A lender")
-                conn.execute(
-                    """INSERT INTO notifications (user_id, lender_id, notification_type, message)
-                       VALUES (?, ?, ?, ?)""",
-                    (user["id"], session["lender_id"], "score_request",
-                     f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.")
-                )
-                conn.commit()
-                
-                # Send WhatsApp notification
-                cur = conn.execute("SELECT phone FROM users WHERE id = ?", (user["id"],))
-                user_phone = cur.fetchone()
-                if user_phone and user_phone["phone"]:
-                    cur = conn.execute("SELECT name, org_name FROM lenders WHERE id = ?", (session["lender_id"],))
-                    lender_info = cur.fetchone()
-                    lender_org = lender_info["org_name"] if lender_info and lender_info["org_name"] else lender_name
-                    whatsapp_message = f"🔔 InsightScore Alert: {lender_org} tried to check your verified credit score, but you haven't generated one yet. Please upload your official documents (Bank statement, UPI transactions, CIBIL report) to generate your verified score. Visit your dashboard to upload documents now!"
-                    send_whatsapp_message(user_phone["phone"], whatsapp_message)
-                
-                # Get lender info for display
-                cur = conn.execute(
-                    "SELECT name, org_name FROM lenders WHERE id = ?",
-                    (session["lender_id"],)
-                )
-                lender_info = cur.fetchone()
-                
-                return render_template("lender_user_no_score.html",
-                                     user=user,
-                                     lender_info=lender_info,
-                                     loan_type=loan_type,
-                                     request_id=request_id,
-                                     loan_types=LOAN_TYPES)
-                
-                # Get loan request if request_id provided
+
+                # If a request_id is provided, load the loan request so the lender can approve/reject.
                 loan_request = None
                 if request_id:
+                    cur = conn.execute("SELECT * FROM loan_requests WHERE id = ?", (request_id,))
+                    loan_request = cur.fetchone()
+                    if loan_request and loan_request["loan_type"]:
+                        loan_type = loan_request["loan_type"]
+
+                # If no explicit request_id, try to load the user's latest pending loan request
+                # (so the lender still sees an approve/reject option after searching).
+                if not loan_request:
                     cur = conn.execute(
-                        "SELECT * FROM loan_requests WHERE id = ?",
-                        (request_id,)
+                        """SELECT * FROM loan_requests
+                           WHERE user_id = ? AND status = 'pending'
+                           ORDER BY created_at DESC LIMIT 1""",
+                        (user["id"],),
                     )
                     loan_request = cur.fetchone()
-                    if loan_request:
+                    if loan_request and loan_request["loan_type"] and not loan_type:
                         loan_type = loan_request["loan_type"]
-                
+
+                # Get verified score
+                cur = conn.execute(
+                    "SELECT * FROM verified_scores WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (user["id"],),
+                )
+                verified_score = cur.fetchone()
+
+                if not verified_score:
+                    # Send notification to user
+                    lender_name = session.get("username", "A lender")
+                    conn.execute(
+                        """INSERT INTO notifications (user_id, lender_id, notification_type, message)
+                           VALUES (?, ?, ?, ?)""",
+                        (
+                            user["id"],
+                            session["lender_id"],
+                            "score_request",
+                            f"{lender_name} tried to check your verified score, but you haven't generated one yet. Please upload your official documents to generate your verified score.",
+                        ),
+                    )
+                    conn.commit()
+
+                    # Send WhatsApp notification
+                    cur = conn.execute("SELECT phone FROM users WHERE id = ?", (user["id"],))
+                    user_phone = cur.fetchone()
+                    if user_phone and user_phone["phone"]:
+                        cur = conn.execute(
+                            "SELECT name, org_name FROM lenders WHERE id = ?",
+                            (session["lender_id"],),
+                        )
+                        lender_info = cur.fetchone()
+                        lender_org = (
+                            lender_info["org_name"]
+                            if lender_info and lender_info["org_name"]
+                            else lender_name
+                        )
+                        whatsapp_message = (
+                            "🔔 InsightScore Alert: "
+                            f"{lender_org} tried to check your verified credit score, but you haven't generated one yet. "
+                            "Please upload your official documents (Bank statement, UPI transactions, CIBIL report) to generate your verified score. "
+                            "Visit your dashboard to upload documents now!"
+                        )
+                        send_whatsapp_message(user_phone["phone"], whatsapp_message)
+
+                    # Get lender info for display
+                    cur = conn.execute(
+                        "SELECT name, org_name FROM lenders WHERE id = ?",
+                        (session["lender_id"],),
+                    )
+                    lender_info = cur.fetchone()
+
+                    return render_template(
+                        "lender_user_no_score.html",
+                        user=user,
+                        lender_info=lender_info,
+                        loan_type=loan_type,
+                        request_id=(loan_request["id"] if loan_request else request_id),
+                        loan_types=LOAN_TYPES,
+                    )
+
                 # Parse verified score data
                 cibil_json = json.loads(verified_score["cibil_json"]) if verified_score["cibil_json"] else {}
                 bank_json = json.loads(verified_score["bank_json"]) if verified_score["bank_json"] else {}
                 upi_json = json.loads(verified_score["upi_json"]) if verified_score["upi_json"] else {}
                 salary_json = json.loads(verified_score["salary_json"]) if verified_score["salary_json"] else {}
                 behavior_json = json.loads(verified_score["behavior_json"]) if verified_score["behavior_json"] else {}
-                
+
                 # Calculate loan-type-specific score
                 loan_decision = None
                 if loan_type:
-                    loan_decision = calculate_loan_type_score(behavior_json, loan_type, cibil_json.get("cibil_score"), salary_json)
-                
-                return render_template("lender_user_score.html",
-                                     user=user,
-                                     verified_score=verified_score,
-                                     cibil_json=cibil_json,
-                                     bank_json=bank_json,
-                                     upi_json=upi_json,
-                                     salary_json=salary_json,
-                                     behavior_json=behavior_json,
-                                     loan_type=loan_type,
-                                     loan_decision=loan_decision,
-                                     loan_request=loan_request,
-                                     loan_types=LOAN_TYPES)
+                    loan_decision = calculate_loan_type_score(
+                        behavior_json, loan_type, cibil_json.get("cibil_score"), salary_json
+                    )
+
+                return render_template(
+                    "lender_user_score.html",
+                    user=user,
+                    verified_score=verified_score,
+                    cibil_json=cibil_json,
+                    bank_json=bank_json,
+                    upi_json=upi_json,
+                    salary_json=salary_json,
+                    behavior_json=behavior_json,
+                    loan_type=loan_type,
+                    loan_decision=loan_decision,
+                    loan_request=loan_request,
+                    loan_types=LOAN_TYPES,
+                )
     
     if request.method == "POST":
         unique_user_id = request.form.get("unique_user_id", "").strip().upper()
