@@ -1,0 +1,379 @@
+PLATFORM DATA FOR GEMINI API - INSIGHTSCORE
+
+================================================================================
+PLATFORM OVERVIEW
+================================================================================
+
+InsightScore is a FinTech web application that provides hybrid credit scoring by combining traditional CIBIL scores with AI-powered behavioral analysis. The platform uses Google Gemini API to analyze financial behavior patterns and generate comprehensive credit scores.
+
+Platform Name: InsightScore
+Tagline: "Credit, clearly explained"
+Version: v3
+Primary Purpose: Hybrid Credit Scoring System
+
+================================================================================
+CORE FUNCTIONALITY
+================================================================================
+
+1. QUICK SCORE (Self-Reported Behavioral Analysis)
+   - Users provide CIBIL score (manual entry or PDF upload)
+   - Users fill behavioral questionnaire about:
+     * Monthly income and income stability
+     * Monthly expenses and savings
+     * Emergency fund availability
+     * Bill payment discipline (paid on time, missed payments)
+     * UPI transaction patterns (monthly transactions, digital vs cash usage)
+     * Expense tracking habits
+     * Overspending patterns
+     * Sudden big expenses
+   - Optional UPI CSV/PDF upload for transaction analysis
+   - Gemini analyzes behavioral patterns and calculates:
+     * Income stability score (0-10)
+     * Spending discipline score (0-10)
+     * Savings behavior score (0-10)
+     * Payment discipline score (0-10)
+     * Digital behavior score (0-10)
+     * Lifestyle stability score (0-10)
+     * Final behavior score (0-10) - weighted average
+   - Hybrid score = (CIBIL Score × 0.4) + (Behavior Score × 100 × 0.6)
+
+2. VERIFIED SCORE (Document-Based Analysis)
+   - Users upload official documents:
+     * CIBIL Credit Report (PDF)
+     * Bank Statement (PDF)
+     * UPI Transaction Statement (CSV/PDF)
+     * Salary Slip (PDF)
+   - Documents are parsed locally to extract structured data (NO raw text sent to LLM)
+   - Only structured JSON metrics are sent to Gemini for analysis
+   - Gemini calculates verified behavioral scores based on actual document data
+   - Caching system prevents reprocessing identical documents
+   - Hybrid score calculated same as Quick Score
+
+3. LOAN REQUEST SYSTEM
+   - Users can request loans (personal, home, education, business, vehicle, gold, other)
+   - Lenders can search users by unique user ID
+   - Lenders view verified scores and make approval/rejection decisions
+   - Loan-type-specific scoring with adjusted risk weights
+   - Notifications sent to users about loan requests and decisions
+
+================================================================================
+SCORING METHODOLOGY
+================================================================================
+
+BEHAVIORAL SCORE COMPONENTS (Each 0-10 scale):
+
+1. Income Stability Score (15% weight)
+   - Based on: Regular salary credits, consistent income, stable employment
+   - Factors: Monthly income consistency, income stability indicator, salary slip regularity
+
+2. Spending Discipline Score (20% weight)
+   - Based on: Controlled spending, reasonable expenses vs income, savings patterns
+   - Factors: Total expenses, largest expense, savings estimate, expense tracking
+
+3. Savings Behavior Score (20% weight)
+   - Based on: Positive savings, healthy balance, income > expenses
+   - Factors: Savings estimate, average balance, total income vs total expenses
+
+4. Payment Discipline Score (25% weight) - HIGHEST WEIGHT
+   - Based on: No late payments, no fees, no negative balance, low credit utilization
+   - Factors: Late payments count, late fees, negative balance occurrences, credit utilization percentage
+
+5. Digital Behavior Score (10% weight)
+   - Based on: Active digital usage, regular bill payments, consistent transactions
+   - Factors: UPI transaction count, bill payments, regularity per day, digital behavior index
+
+6. Lifestyle Stability Score (10% weight)
+   - Based on: Manageable EMIs, regular transaction patterns, stable loan portfolio
+   - Factors: EMI payments, transaction regularity, open loans count
+
+FINAL BEHAVIOR SCORE:
+- Weighted average of all 6 components
+- Range: 0-10 (converted to 0-1000 for hybrid calculation)
+
+HYBRID SCORE CALCULATION:
+- If CIBIL score available: (CIBIL × 0.4) + (Behavior Score × 100 × 0.6)
+- If no CIBIL: Behavior Score × 100
+- Range: 0-900 (similar to CIBIL scale)
+
+LOAN-TYPE-SPECIFIC SCORING:
+- Personal Loan: CIBIL 50% + Behavior 50%
+- Home Loan: CIBIL 60% + Behavior 40%
+- Education Loan: CIBIL 40% + Behavior 60%
+- Business Loan: CIBIL 45% + Behavior 55%
+- Vehicle Loan: CIBIL 50% + Behavior 50%
+- Gold Loan: CIBIL 30% + Behavior 70%
+- Other: CIBIL 50% + Behavior 50%
+
+================================================================================
+DATA STRUCTURE FOR GEMINI API
+================================================================================
+
+QUICK SCORE INPUT FORMAT:
+{
+  "monthly_income": "<amount>",
+  "income_stability": "<stable/variable>",
+  "monthly_expenses": "<amount>",
+  "monthly_savings": "<amount>",
+  "emergency_fund": "<yes/no/amount>",
+  "paid_bills_on_time": "<always/usually/sometimes/rarely>",
+  "missed_payments": "<count>",
+  "monthly_upi_transactions": "<count>",
+  "digital_vs_cash": "<percentage>",
+  "tracks_expenses": "<yes/no>",
+  "overspends_often": "<yes/no>",
+  "sudden_big_expenses": "<yes/no>",
+  "upi_data": {
+    "total_transactions": <number>,
+    "total_spend": <number>,
+    "bill_payments": <number>,
+    "regularity": <number>,
+    "avg_transaction": <number>
+  }
+}
+
+VERIFIED SCORE INPUT FORMAT (Structured JSON only):
+{
+  "bank": {
+    "total_income": <number>,
+    "salary_credits": <number>,
+    "avg_monthly_income": <number>,
+    "total_expenses": <number>,
+    "emi_payments": <number>,
+    "late_fees": <number>,
+    "largest_expense": <number>,
+    "savings_estimate": <number>,
+    "digital_spend": <number>,
+    "cash_spend": <number>,
+    "avg_balance": <number>,
+    "negative_balance": <boolean>
+  },
+  "upi": {
+    "upi_transaction_count": <number>,
+    "upi_total_spend": <number>,
+    "upi_bill_payments": <number>,
+    "merchant_categories": [<array>],
+    "digital_behavior_index": <number>,
+    "regularity_per_day": <number>
+  },
+  "credit_bureau": {
+    "cibil_score": <300-900>,
+    "open_loans": <number>,
+    "late_payments": <number>,
+    "credit_utilization": <percentage>,
+    "credit_history_length_years": <number>
+  },
+  "salary": {
+    "gross_salary": <number>,
+    "net_salary": <number>,
+    "is_regular": <boolean>
+  }
+}
+
+GEMINI OUTPUT FORMAT (Required JSON):
+{
+  "income_stability_score": <0-10>,
+  "spending_discipline_score": <0-10>,
+  "savings_behavior_score": <0-10>,
+  "payment_discipline_score": <0-10>,
+  "digital_behavior_score": <0-10>,
+  "lifestyle_stability_score": <0-10>,
+  "behavior_score": <0-10>,
+  "explanation": "<3-4 bullet points explaining the score>",
+  "key_insights": {
+    "positive": ["<what increased score>", "<another positive>"],
+    "negative": ["<what reduced score>", "<another negative>"]
+  },
+  "red_flags": ["<any concerning patterns>"],  // Only for verified scores
+  "improvement_tips": ["<tip 1>", "<tip 2>", "<tip 3>"]
+}
+
+================================================================================
+PLATFORM FEATURES
+================================================================================
+
+USER FEATURES:
+- Free credit score checking (no impact on credit score)
+- Quick Score: Fast behavioral analysis with self-reported data
+- Verified Score: Document-based comprehensive analysis
+- Score history tracking (last 6 months)
+- Loan request submission
+- Notification system for loan updates
+- WhatsApp notifications for reminders and alerts
+- Secure document upload and processing
+- Automatic file deletion after processing
+- Document caching to avoid reprocessing
+
+LENDER FEATURES:
+- Search users by unique user ID
+- View verified scores and detailed breakdowns
+- Loan-type-specific risk assessment
+- Approve/reject loan requests
+- View loan history
+- Customize loan types offered
+- Receive notifications about pending loan requests
+
+TECHNICAL FEATURES:
+- Local document parsing (no raw PDFs sent to LLM)
+- Structured JSON-only data transmission
+- File content hashing for accurate caching
+- Session-based authentication
+- Password hashing (Werkzeug)
+- SQLite database
+- Flask web framework
+- Responsive design (mobile-friendly)
+
+================================================================================
+SECURITY & PRIVACY
+================================================================================
+
+- Files are deleted immediately after parsing
+- Passwords are hashed using Werkzeug security
+- Session-based authentication
+- No long-term file storage
+- Document content hashing for cache verification
+- Secure API key management via environment variables
+- No raw document text sent to LLM (only structured metrics)
+
+================================================================================
+USER ROLES
+================================================================================
+
+1. USER ROLE:
+   - Can generate Quick Scores and Verified Scores
+   - Can request loans
+   - Can view score history
+   - Receives notifications about loan status
+   - Has unique user ID (format: USR-XXXX)
+
+2. LENDER ROLE:
+   - Can search users by unique user ID
+   - Can view verified scores (if user has generated one)
+   - Can approve/reject loan requests
+   - Can customize loan types offered
+   - Has unique lender ID (format: LND-XXXX)
+
+================================================================================
+DOCUMENT PROCESSING
+================================================================================
+
+SUPPORTED DOCUMENTS:
+1. CIBIL Credit Report (PDF)
+   - Extracts: CIBIL score, open loans, late payments, credit utilization, credit history length
+
+2. Bank Statement (PDF)
+   - Extracts: Total income, salary credits, expenses, EMI payments, late fees, savings, balances, transaction patterns
+
+3. UPI Statements (CSV/PDF)
+   - Extracts: Transaction count, total spend, bill payments, merchant categories, regularity patterns
+
+4. Salary Slip (PDF)
+   - Extracts: Gross salary, net salary, employment regularity
+
+PROCESSING PIPELINE:
+1. Document upload → File saved temporarily
+2. Local parsing → Extract structured metrics (NO LLM call)
+3. Build verified dataset → Combine all metrics into clean JSON
+4. Validate dataset → Ensure sufficient data exists
+5. Call Gemini Pro → Send ONLY structured JSON for scoring
+6. Calculate hybrid score → Combine CIBIL + Behavior scores
+7. Save to database → Store with document hash for caching
+8. Delete files → Remove uploaded files immediately
+
+================================================================================
+GEMINI API USAGE GUIDELINES
+================================================================================
+
+MODEL USED: gemini-2.0-flash-exp (for scoring)
+
+PROMPT STRUCTURE:
+1. Role definition: "You are a financial behavior analyst"
+2. Data source clarification: "Based on [self-reported/verified document] data"
+3. Scoring criteria: Detailed explanation of each score component
+4. Weight distribution: Clear percentage breakdown
+5. Output format: Strict JSON schema requirement
+6. Validation rules: Scores must be 0-10, no hallucination
+
+IMPORTANT RULES FOR GEMINI:
+- Use ONLY the provided JSON data
+- Do NOT hallucinate or invent fields
+- If field is missing/null, use null or 0 (do NOT assume values)
+- Base scores ONLY on verified document data (for verified scores)
+- Return valid JSON in exact format specified
+- Scores must be between 0-10 (will be validated and clamped)
+
+FALLBACK BEHAVIOR:
+- If Gemini fails or returns invalid JSON, use default scores (7.0 for all)
+- Provide generic explanation and improvement tips
+- Log errors for debugging
+
+================================================================================
+SCORE INTERPRETATION
+================================================================================
+
+BEHAVIOR SCORE RANGES:
+- 8.5-10: Excellent financial behavior
+- 7.0-8.4: Good financial behavior
+- 5.5-6.9: Moderate financial behavior
+- 4.0-5.4: Needs improvement
+- 0-3.9: Poor financial behavior
+
+HYBRID SCORE RANGES (similar to CIBIL):
+- 750-900: Excellent creditworthiness
+- 650-749: Good creditworthiness
+- 550-649: Fair creditworthiness
+- 400-549: Poor creditworthiness
+- 300-399: Very poor creditworthiness
+
+LOAN DECISION GUIDELINES:
+- Adjusted Score ≥ 750: Low risk → Approve
+- Adjusted Score 650-749: Medium risk → Approve with Caution
+- Adjusted Score 550-649: Medium-High risk → Caution / Need more documents
+- Adjusted Score < 550: High risk → Reject
+
+================================================================================
+PLATFORM STATISTICS & METRICS
+================================================================================
+
+SCORE TYPES:
+- Quick Score: Monthly behavioral score (self-reported)
+- Verified Score: Document-based comprehensive score
+
+DATABASE TABLES:
+- users: User accounts with unique IDs
+- lenders: Lender accounts with unique IDs
+- quick_scores: Monthly behavioral scores
+- verified_scores: Document-based scores with caching
+- loan_requests: Loan application tracking
+- notifications: User notification system
+
+NOTIFICATION TYPES:
+- score_request: Lender requested user's verified score
+- loan_approved: Loan request approved
+- loan_rejected: Loan request rejected
+- monthly_reminder: Reminder to check score (30 days)
+
+================================================================================
+INTEGRATION DETAILS
+================================================================================
+
+EXTERNAL SERVICES:
+1. Google Gemini API
+   - Model: gemini-2.0-flash-exp
+   - Purpose: Behavioral score calculation
+   - Input: Structured JSON only
+   - Output: JSON with scores and insights
+
+2. UltraMSG WhatsApp API (Optional)
+   - Purpose: Send notifications and reminders
+   - Features: Monthly reminders, loan status updates
+
+ENVIRONMENT VARIABLES REQUIRED:
+- GEMINI_API_KEY: Google Gemini API key
+- SECRET_KEY: Flask session secret key
+- ULTRAMSG_INSTANCE_ID: WhatsApp API instance ID (optional)
+- ULTRAMSG_TOKEN: WhatsApp API token (optional)
+- PORT: Server port (default: 5000)
+
+================================================================================
+END OF PLATFORM DATA
+================================================================================
