@@ -25,25 +25,32 @@ import pandas as pd
 import google.generativeai as genai
 import requests
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "auth.db"
 UPLOAD_FOLDER = BASE_DIR / "uploads"
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
-# Gemini API Key
-GEMINI_API_KEY = "AIzaSyCrFYdJIoSYyyqH1McZ1S8V_wa9qL-TJu4"
-genai.configure(api_key=GEMINI_API_KEY)
+# Gemini API Key - Load from environment variable
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    raise ValueError("GEMINI_API_KEY environment variable is not set. Please create a .env file with your API key.")
 
 ALLOWED_EXTENSIONS = {'pdf', 'csv'}
 
 # Loan types
 LOAN_TYPES = ['personal', 'home', 'education', 'business', 'vehicle', 'gold', 'other']
 
-# UltraMSG WhatsApp API Configuration
-ULTRAMSG_API_URL = "https://api.ultramsg.com/instance160178/"
-ULTRAMSG_TOKEN = "glqz6gz9yr7txkik"
-ULTRAMSG_INSTANCE_ID = "instance160178"
+# UltraMSG WhatsApp API Configuration - Load from environment variables
+ULTRAMSG_INSTANCE_ID = os.environ.get("ULTRAMSG_INSTANCE_ID", "")
+ULTRAMSG_TOKEN = os.environ.get("ULTRAMSG_TOKEN", "")
+ULTRAMSG_API_URL = f"https://api.ultramsg.com/{ULTRAMSG_INSTANCE_ID}/" if ULTRAMSG_INSTANCE_ID else ""
 
 def get_db(app: Flask) -> sqlite3.Connection:
     conn = sqlite3.connect(app.config["DATABASE"])
