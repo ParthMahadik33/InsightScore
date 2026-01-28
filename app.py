@@ -27,6 +27,15 @@ import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+# Import optimized utilities for verified score pipeline
+from utils.parse_cibil_report import parse_cibil_report as parse_cibil_report_optimized
+from utils.parse_bank_statement import parse_bank_statement as parse_bank_statement_optimized
+from utils.parse_upi_statement import parse_upi_csv as parse_upi_csv_optimized, parse_upi_pdf as parse_upi_pdf_optimized
+from utils.parse_salary_slip import parse_salary_slip as parse_salary_slip_optimized
+from utils.build_verified_dataset import build_verified_dataset, validate_dataset
+from utils.gemini_processor import call_gemini_pro_for_scoring
+from utils.cache_manager import hash_documents, check_cache, save_verified_score
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -70,9 +79,9 @@ def generate_unique_lender_id():
     return f"LND-{random_part}"
 
 def calculate_doc_hash(files_dict):
-    """Calculate hash of uploaded documents for caching"""
-    combined = json.dumps(files_dict, sort_keys=True)
-    return hashlib.sha256(combined.encode()).hexdigest()
+    """Calculate hash of uploaded documents for caching - uses file content hashing"""
+    # Use optimized cache manager for file content hashing
+    return hash_documents(files_dict)
 
 def send_whatsapp_message(phone_number, message):
     """Send WhatsApp message via UltraMSG API"""
@@ -329,7 +338,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def extract_cibil_from_pdf(pdf_path):
-    """Extract CIBIL score and related info from PDF"""
+    """Extract CIBIL score and related info from PDF (Quick Score flow - kept for compatibility)"""
     try:
         with pdfplumber.open(pdf_path) as pdf:
             text = ""
@@ -364,7 +373,7 @@ def extract_cibil_from_pdf(pdf_path):
         return {'error': str(e)}
 
 def parse_upi_csv(csv_path):
-    """Parse UPI transaction CSV"""
+    """Parse UPI transaction CSV (Quick Score flow - kept for compatibility)"""
     try:
         df = pd.read_csv(csv_path)
         
@@ -411,7 +420,7 @@ def parse_upi_csv(csv_path):
         return {'error': str(e)}
 
 def parse_upi_pdf(pdf_path):
-    """Parse UPI transaction PDF"""
+    """Parse UPI transaction PDF (Quick Score flow - kept for compatibility)"""
     try:
         with pdfplumber.open(pdf_path) as pdf:
             text = ""
@@ -1212,7 +1221,13 @@ def verified_score_upload():
 
 @app.route("/process-verified-score")
 def process_verified_score():
-    """Process verified score from documents"""
+    """
+    OPTIMIZED Verified Score Processing Pipeline
+    - Local extraction (no raw PDF to LLM)
+    - Structured JSON only
+    - File content hashing for accurate caching
+    - Gemini Pro for scoring only
+    """
     if "user_id" not in session or session.get("role") != "user":
         return redirect(url_for("signin"))
     
@@ -1222,82 +1237,107 @@ def process_verified_score():
     
     files_uploaded = session["verified_files"]
     
-    # Parse documents
-    cibil_json = {}
-    bank_json = {}
-    upi_json = {}
-    salary_json = {}
+    # STEP 1: Calculate document hash BEFORE parsing (for accurate caching)
+    doc_hash = hash_documents(files_uploaded)
     
-    if 'cibil' in files_uploaded:
-        cibil_json = extract_cibil_from_pdf(files_uploaded['cibil'])
-        try:
-            os.remove(files_uploaded['cibil'])
-        except:
-            pass
-    
-    if 'bank' in files_uploaded:
-        bank_json = parse_bank_statement(files_uploaded['bank'])
-        try:
-            os.remove(files_uploaded['bank'])
-        except:
-            pass
-    
-    if 'upi' in files_uploaded:
-        if files_uploaded['upi'].endswith('.csv'):
-            upi_json = parse_upi_csv(files_uploaded['upi'])
-        else:
-            upi_json = parse_upi_pdf(files_uploaded['upi'])
-        try:
-            os.remove(files_uploaded['upi'])
-        except:
-            pass
-    
-    if 'salary' in files_uploaded:
-        salary_json = parse_salary_slip(files_uploaded['salary'])
-        try:
-            os.remove(files_uploaded['salary'])
-        except:
-            pass
-    
-    # Calculate document hash for caching
-    doc_hash = calculate_doc_hash({
-        'cibil': cibil_json,
-        'bank': bank_json,
-        'upi': upi_json,
-        'salary': salary_json
-    })
-    
-    # Check if verified score already exists for this doc_hash
+    # STEP 2: Check cache first (fast path)
     with get_db(app) as conn:
-        cur = conn.execute(
-            "SELECT * FROM verified_scores WHERE user_id = ? AND doc_hash = ?",
-            (session["user_id"], doc_hash)
-        )
-        existing_score = cur.fetchone()
+        cached_score = check_cache(conn, session["user_id"], doc_hash)
         
-        if existing_score:
-            # Use cached score
-            behavior_json = json.loads(existing_score["behavior_json"])
-            hybrid_score = existing_score["hybrid_score"]
+        if cached_score:
+            # Use cached score - NO processing needed
             flash("Using cached verified score (documents unchanged).", "info")
+            behavior_json = json.loads(cached_score["behavior_json"])
+            hybrid_score = cached_score["hybrid_score"]
+            cibil_json = json.loads(cached_score["cibil_json"]) if cached_score["cibil_json"] else {}
+            bank_json = json.loads(cached_score["bank_json"]) if cached_score["bank_json"] else {}
+            upi_json = json.loads(cached_score["upi_json"]) if cached_score["upi_json"] else {}
+            salary_json = json.loads(cached_score["salary_json"]) if cached_score["salary_json"] else {}
         else:
-            # Calculate new verified score using LLM
-            behavior_result = calculate_verified_behavioral_score(
-                cibil_json, bank_json, upi_json, salary_json
+            # STEP 3: Parse documents locally (FAST - no LLM calls)
+            cibil_json = {}
+            bank_json = {}
+            upi_json = {}
+            salary_json = {}
+            
+            if 'cibil' in files_uploaded:
+                try:
+                    cibil_json = parse_cibil_report_optimized(files_uploaded['cibil'])
+                except Exception as e:
+                    flash(f"Error parsing CIBIL report: {str(e)}", "error")
+                    cibil_json = {}
+            
+            if 'bank' in files_uploaded:
+                try:
+                    bank_json = parse_bank_statement_optimized(files_uploaded['bank'])
+                except Exception as e:
+                    flash(f"Error parsing bank statement: {str(e)}", "error")
+                    bank_json = {}
+            
+            if 'upi' in files_uploaded:
+                try:
+                    if files_uploaded['upi'].endswith('.csv'):
+                        upi_json = parse_upi_csv_optimized(files_uploaded['upi'])
+                    else:
+                        upi_json = parse_upi_pdf_optimized(files_uploaded['upi'])
+                except Exception as e:
+                    flash(f"Error parsing UPI statement: {str(e)}", "error")
+                    upi_json = {}
+            
+            if 'salary' in files_uploaded:
+                try:
+                    salary_json = parse_salary_slip_optimized(files_uploaded['salary'])
+                except Exception as e:
+                    flash(f"Error parsing salary slip: {str(e)}", "error")
+                    salary_json = {}
+            
+            # STEP 4: Build structured dataset (ONLY key metrics)
+            dataset = build_verified_dataset(
+                bank_data=bank_json,
+                upi_data=upi_json,
+                credit_bureau_data=cibil_json,
+                salary_data=salary_json
             )
+            
+            # STEP 5: Validate dataset has useful data
+            if not validate_dataset(dataset):
+                flash("Unable to extract sufficient data from documents. Please ensure documents are clear and complete.", "error")
+                session.pop("verified_files", None)
+                return redirect(url_for("verified_score_upload"))
+            
+            # STEP 6: Call Gemini Pro for scoring (ONLY structured JSON sent)
+            try:
+                behavior_result = call_gemini_pro_for_scoring(dataset)
+            except Exception as e:
+                flash(f"Error calculating score: {str(e)}", "error")
+                session.pop("verified_files", None)
+                return redirect(url_for("verified_score_upload"))
+            
             behavior_score = behavior_result.get("behavior_score", 7.0)
             cibil_score = cibil_json.get("cibil_score")
             hybrid_score = calculate_hybrid_score(cibil_score, behavior_score)
-            
-            # Store in verified_scores table
-            conn.execute(
-                """INSERT INTO verified_scores (user_id, cibil_json, bank_json, upi_json, salary_json, behavior_json, hybrid_score, doc_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (session["user_id"], json.dumps(cibil_json), json.dumps(bank_json),
-                 json.dumps(upi_json), json.dumps(salary_json), json.dumps(behavior_result),
-                 hybrid_score, doc_hash)
-            )
             behavior_json = behavior_result
+            
+            # STEP 7: Save to database with caching
+            save_verified_score(
+                conn,
+                session["user_id"],
+                doc_hash,
+                cibil_json,
+                bank_json,
+                upi_json,
+                salary_json,
+                behavior_json,
+                hybrid_score
+            )
+        
+        # Clean up uploaded files
+        for file_path in files_uploaded.values():
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except:
+                pass
     
     # Store in session for result page
     session["result"] = {

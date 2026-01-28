@@ -143,6 +143,95 @@
             font-size: 14px;
         }
 
+        /* Progress Indicator Styles */
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .progress-step {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .progress-step::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            background: #e2e8f0;
+            z-index: 0;
+        }
+
+        .progress-step:last-child::after {
+            display: none;
+        }
+
+        .progress-step.active .step-icon {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .progress-step.completed .step-icon {
+            background: var(--accent);
+            color: white;
+        }
+
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-bottom: 8px;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .progress-step.active .step-label {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .progress-step.completed .step-label {
+            color: var(--accent);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 4px;
+        }
+
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
             body {
@@ -259,7 +348,7 @@
                 <p><strong>Note:</strong> Upload at least one document. The more documents you upload, the more accurate your verified score will be.</p>
             </div>
 
-            <form method="post" action="{{ url_for('verified_score_upload') }}" enctype="multipart/form-data">
+            <form method="post" action="{{ url_for('verified_score_upload') }}" enctype="multipart/form-data" id="uploadForm">
                 <div class="form-group">
                     <label for="cibil_file">CIBIL/Experian/CRIF Credit Report (PDF)</label>
                     <input type="file" id="cibil_file" name="cibil_file" accept=".pdf">
@@ -280,8 +369,38 @@
                     <input type="file" id="salary_file" name="salary_file" accept=".pdf">
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Generate Verified Score</button>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;" id="submitBtn">Generate Verified Score</button>
             </form>
+            
+            <!-- Progress Indicator (hidden by default) -->
+            <div id="progressContainer" style="display: none; margin-top: 24px;">
+                <div class="progress-steps">
+                    <div class="progress-step" id="step1">
+                        <div class="step-icon">📤</div>
+                        <div class="step-label">Upload</div>
+                    </div>
+                    <div class="progress-step" id="step2">
+                        <div class="step-icon">🔍</div>
+                        <div class="step-label">Extracting</div>
+                    </div>
+                    <div class="progress-step" id="step3">
+                        <div class="step-icon">✓</div>
+                        <div class="step-label">Validating</div>
+                    </div>
+                    <div class="progress-step" id="step4">
+                        <div class="step-icon">🧠</div>
+                        <div class="step-label">Scoring</div>
+                    </div>
+                    <div class="progress-step" id="step5">
+                        <div class="step-icon">✅</div>
+                        <div class="step-label">Done</div>
+                    </div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p id="progressStatus" style="text-align: center; margin-top: 16px; color: var(--text-muted);">Processing your documents...</p>
+            </div>
         </div>
 
         <!-- Mobile Bottom Navigation -->
@@ -304,6 +423,62 @@
             </a>
         </nav>
     </div>
+
+    <script>
+        // Progress tracking for verified score processing
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            const submitBtn = document.getElementById('submitBtn');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            // Show progress indicator
+            progressContainer.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            
+            // Simulate progress steps (actual processing happens server-side)
+            let currentStep = 1;
+            const steps = [
+                { step: 1, label: 'Uploading documents...', progress: 10 },
+                { step: 2, label: 'Extracting data from documents...', progress: 30 },
+                { step: 3, label: 'Validating extracted data...', progress: 50 },
+                { step: 4, label: 'Calculating verified score...', progress: 80 },
+                { step: 5, label: 'Complete!', progress: 100 }
+            ];
+            
+            function updateProgress() {
+                if (currentStep <= steps.length) {
+                    const stepData = steps[currentStep - 1];
+                    
+                    // Update step visual
+                    for (let i = 1; i <= 5; i++) {
+                        const stepEl = document.getElementById('step' + i);
+                        stepEl.classList.remove('active', 'completed');
+                        if (i < currentStep) {
+                            stepEl.classList.add('completed');
+                        } else if (i === currentStep) {
+                            stepEl.classList.add('active');
+                        }
+                    }
+                    
+                    // Update progress bar
+                    progressBar.style.width = stepData.progress + '%';
+                    progressStatus.textContent = stepData.label;
+                    
+                    currentStep++;
+                    
+                    // Continue to next step (with delay for visual effect)
+                    if (currentStep <= steps.length) {
+                        setTimeout(updateProgress, 800);
+                    }
+                }
+            }
+            
+            // Start progress animation
+            setTimeout(updateProgress, 300);
+        });
+    </script>
 </body>
 </html>
 
