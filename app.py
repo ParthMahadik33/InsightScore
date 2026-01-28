@@ -35,6 +35,24 @@ from utils.parse_salary_slip import parse_salary_slip as parse_salary_slip_optim
 from utils.build_verified_dataset import build_verified_dataset, validate_dataset
 from utils.gemini_processor import call_gemini_pro_for_scoring
 from utils.cache_manager import hash_documents, check_cache, save_verified_score
+from utils.risk_engine import compute_risk_tier
+from utils.interest_rate_engine import recommend_interest_rate_range
+from utils.affordability_engine import estimate_affordability
+from utils.improvement_plans import generate_improvement_plan
+
+
+def _month_key(ts: str) -> str:
+    """Convert a timestamp string into YYYY-MM month key."""
+    try:
+        # supports sqlite CURRENT_TIMESTAMP format "YYYY-MM-DD HH:MM:SS"
+        dt = datetime.fromisoformat(ts.replace(" ", "T"))
+        return dt.strftime("%Y-%m")
+    except Exception:
+        try:
+            dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            return dt.strftime("%Y-%m")
+        except Exception:
+            return ""
 
 # Load environment variables from .env file
 load_dotenv()
@@ -263,12 +281,28 @@ def init_db(app: Flask) -> None:
                 salary_json TEXT,
                 behavior_json TEXT,
                 hybrid_score REAL,
+                risk_tier TEXT,
+                affordability_json TEXT,
+                interest_rate_json TEXT,
+                improvement_plan_json TEXT,
                 doc_hash TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
             """
         )
+
+        # Ensure new columns exist in older databases (SQLite needs ALTER TABLE)
+        cur = conn.execute("PRAGMA table_info(verified_scores)")
+        verified_cols = {row[1] for row in cur.fetchall()}
+        if "risk_tier" not in verified_cols:
+            conn.execute("ALTER TABLE verified_scores ADD COLUMN risk_tier TEXT")
+        if "affordability_json" not in verified_cols:
+            conn.execute("ALTER TABLE verified_scores ADD COLUMN affordability_json TEXT")
+        if "interest_rate_json" not in verified_cols:
+            conn.execute("ALTER TABLE verified_scores ADD COLUMN interest_rate_json TEXT")
+        if "improvement_plan_json" not in verified_cols:
+            conn.execute("ALTER TABLE verified_scores ADD COLUMN improvement_plan_json TEXT")
         
         # Create loan_requests table
         conn.execute(
@@ -333,6 +367,96 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 
 # Initialize database
 init_db(app)
+
+
+@app.route("/api/financial-trends")
+def api_financial_trends():
+    """Month-wise trends for dashboard charts (quick + verified)."""
+    if "user_id" not in session or session.get("role") != "user":
+        return jsonify({"error": "Unauthorized"}), 401
+
+    user_id = session["user_id"]
+    with get_db(app) as conn:
+        # verified scores (for income/expense/savings/upi/hybrid)
+        cur = conn.execute(
+            """SELECT created_at, hybrid_score, bank_json, upi_json
+               FROM verified_scores
+               WHERE user_id = ?
+               ORDER BY created_at ASC""",
+            (user_id,),
+        )
+        verified_rows = cur.fetchall()
+
+        # quick scores (for hybrid trend)
+        cur = conn.execute(
+            """SELECT created_at, hybrid_score
+               FROM quick_scores
+               WHERE user_id = ?
+               ORDER BY created_at ASC""",
+            (user_id,),
+        )
+        quick_rows = cur.fetchall()
+
+    trends = {}
+
+    def _ensure_month(m: str):
+        if m and m not in trends:
+            trends[m] = {
+                "verified_income": None,
+                "verified_expense": None,
+                "verified_savings": None,
+                "verified_upi_spend": None,
+                "verified_hybrid": None,
+                "quick_hybrid": None,
+            }
+
+    # aggregate verified (take last entry per month)
+    for r in verified_rows:
+        m = _month_key(r["created_at"])
+        _ensure_month(m)
+        if not m:
+            continue
+        bank_json = {}
+        upi_json = {}
+        try:
+            bank_json = json.loads(r["bank_json"]) if r["bank_json"] else {}
+        except Exception:
+            bank_json = {}
+        try:
+            upi_json = json.loads(r["upi_json"]) if r["upi_json"] else {}
+        except Exception:
+            upi_json = {}
+
+        # these values are totals in many cases; charts are still useful as comparative trend lines
+        trends[m]["verified_income"] = bank_json.get("avg_monthly_income") or bank_json.get("total_income")
+        trends[m]["verified_expense"] = bank_json.get("total_expenses")
+        trends[m]["verified_savings"] = bank_json.get("savings_estimate")
+        trends[m]["verified_upi_spend"] = upi_json.get("upi_total_spend")
+        trends[m]["verified_hybrid"] = r["hybrid_score"]
+
+    # aggregate quick hybrid (take last entry per month)
+    for r in quick_rows:
+        m = _month_key(r["created_at"])
+        _ensure_month(m)
+        if not m:
+            continue
+        trends[m]["quick_hybrid"] = r["hybrid_score"]
+
+    months = sorted([m for m in trends.keys() if m])
+    payload = {
+        "months": months,
+        "verified": {
+            "income": [trends[m]["verified_income"] for m in months],
+            "expenses": [trends[m]["verified_expense"] for m in months],
+            "savings": [trends[m]["verified_savings"] for m in months],
+            "upi_spend": [trends[m]["verified_upi_spend"] for m in months],
+            "hybrid": [trends[m]["verified_hybrid"] for m in months],
+        },
+        "quick": {
+            "hybrid": [trends[m]["quick_hybrid"] for m in months],
+        },
+    }
+    return jsonify(payload)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -1249,6 +1373,10 @@ def process_verified_score():
             flash("Using cached verified score (documents unchanged).", "info")
             behavior_json = json.loads(cached_score["behavior_json"])
             hybrid_score = cached_score["hybrid_score"]
+            risk_tier = cached_score.get("risk_tier")
+            affordability_json = json.loads(cached_score["affordability_json"]) if cached_score.get("affordability_json") else None
+            interest_rate_json = json.loads(cached_score["interest_rate_json"]) if cached_score.get("interest_rate_json") else None
+            improvement_plan_json = json.loads(cached_score["improvement_plan_json"]) if cached_score.get("improvement_plan_json") else None
             cibil_json = json.loads(cached_score["cibil_json"]) if cached_score["cibil_json"] else {}
             bank_json = json.loads(cached_score["bank_json"]) if cached_score["bank_json"] else {}
             upi_json = json.loads(cached_score["upi_json"]) if cached_score["upi_json"] else {}
@@ -1317,6 +1445,23 @@ def process_verified_score():
             cibil_score = cibil_json.get("cibil_score")
             hybrid_score = calculate_hybrid_score(cibil_score, behavior_score)
             behavior_json = behavior_result
+
+            # STEP 6.5: Compute derived fintech features (NO LLM)
+            risk_info = compute_risk_tier(hybrid_score)
+            risk_tier = risk_info["tier"]
+
+            # Use loan_type if user has a pending request; else default to 'personal'
+            cur = conn.execute(
+                "SELECT loan_type FROM loan_requests WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+                (session["user_id"],),
+            )
+            pending_req = cur.fetchone()
+            loan_type_for_calc = (pending_req["loan_type"] if pending_req else "personal") or "personal"
+
+            interest_rate_json = recommend_interest_rate_range(risk_tier, loan_type_for_calc, hybrid_score)
+            apr_mid = (interest_rate_json["apr_percent_range"]["min"] + interest_rate_json["apr_percent_range"]["max"]) / 2.0
+            affordability_json = estimate_affordability(dataset, risk_tier, loan_type_for_calc, apr_mid)
+            improvement_plan_json = generate_improvement_plan(dataset, behavior_json)
             
             # STEP 7: Save to database with caching
             save_verified_score(
@@ -1328,7 +1473,11 @@ def process_verified_score():
                 upi_json,
                 salary_json,
                 behavior_json,
-                hybrid_score
+                hybrid_score,
+                risk_tier=risk_tier,
+                affordability_json=affordability_json,
+                interest_rate_json=interest_rate_json,
+                improvement_plan_json=improvement_plan_json,
             )
         
         # Clean up uploaded files
@@ -1348,6 +1497,10 @@ def process_verified_score():
         "behavior_score": behavior_json.get("behavior_score", 7.0),
         "hybrid_score": hybrid_score,
         "behavior_details": behavior_json,
+        "risk_tier": risk_tier if "risk_tier" in locals() else None,
+        "affordability": affordability_json if "affordability_json" in locals() else None,
+        "interest_rate": interest_rate_json if "interest_rate_json" in locals() else None,
+        "improvement_plan": improvement_plan_json if "improvement_plan_json" in locals() else None,
         "score_type": "verified"
     }
     
@@ -1548,6 +1701,38 @@ def lender_search_user():
                 salary_json = json.loads(verified_score["salary_json"]) if verified_score["salary_json"] else {}
                 behavior_json = json.loads(verified_score["behavior_json"]) if verified_score["behavior_json"] else {}
 
+                # Derived fintech fields (may be missing for older rows)
+                risk_tier = verified_score["risk_tier"] if "risk_tier" in verified_score.keys() else None
+                affordability = None
+                interest_rate = None
+                improvement_plan = None
+                try:
+                    affordability = json.loads(verified_score["affordability_json"]) if verified_score.get("affordability_json") else None
+                except Exception:
+                    affordability = None
+                try:
+                    interest_rate = json.loads(verified_score["interest_rate_json"]) if verified_score.get("interest_rate_json") else None
+                except Exception:
+                    interest_rate = None
+                try:
+                    improvement_plan = json.loads(verified_score["improvement_plan_json"]) if verified_score.get("improvement_plan_json") else None
+                except Exception:
+                    improvement_plan = None
+
+                if not risk_tier or not affordability or not interest_rate:
+                    dataset = build_verified_dataset(
+                        bank_data=bank_json,
+                        upi_data=upi_json,
+                        credit_bureau_data=cibil_json,
+                        salary_data=salary_json,
+                    )
+                    risk_tier = risk_tier or compute_risk_tier(verified_score["hybrid_score"]).get("tier")
+                    loan_type_for_calc = loan_type or "personal"
+                    interest_rate = interest_rate or recommend_interest_rate_range(risk_tier, loan_type_for_calc, verified_score["hybrid_score"])
+                    apr_mid = (interest_rate["apr_percent_range"]["min"] + interest_rate["apr_percent_range"]["max"]) / 2.0
+                    affordability = affordability or estimate_affordability(dataset, risk_tier, loan_type_for_calc, apr_mid)
+                    improvement_plan = improvement_plan or generate_improvement_plan(dataset, behavior_json)
+
                 # Calculate loan-type-specific score
                 loan_decision = None
                 if loan_type:
@@ -1567,6 +1752,10 @@ def lender_search_user():
                     loan_type=loan_type,
                     loan_decision=loan_decision,
                     loan_request=loan_request,
+                    risk_tier=risk_tier,
+                    affordability=affordability,
+                    interest_rate=interest_rate,
+                    improvement_plan=improvement_plan,
                     loan_types=LOAN_TYPES,
                 )
     

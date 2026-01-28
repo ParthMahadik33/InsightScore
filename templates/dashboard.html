@@ -162,6 +162,28 @@
             margin-top: 20px;
         }
 
+        .trends-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .trend-card {
+            padding: 16px;
+            background: var(--bg-soft);
+            border-radius: 12px;
+        }
+
+        .trend-card h4 {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: var(--text-main);
+        }
+
+        .trend-canvas {
+            height: 220px;
+        }
+
         .loan-request-form {
             margin-top: 20px;
         }
@@ -463,6 +485,36 @@
         </div>
         {% endif %}
 
+        <!-- Financial Trends -->
+        <div class="card">
+            <h3>Financial Trends</h3>
+            <p style="color: var(--text-muted); margin-top: -8px; margin-bottom: 16px;">
+                Month-wise trends based on your stored Quick + Verified scores.
+            </p>
+            <div class="trends-grid">
+                <div class="trend-card">
+                    <h4>Verified Income Trend</h4>
+                    <div class="trend-canvas"><canvas id="trendIncome"></canvas></div>
+                </div>
+                <div class="trend-card">
+                    <h4>Verified Expense Trend</h4>
+                    <div class="trend-canvas"><canvas id="trendExpense"></canvas></div>
+                </div>
+                <div class="trend-card">
+                    <h4>Verified Savings Trend</h4>
+                    <div class="trend-canvas"><canvas id="trendSavings"></canvas></div>
+                </div>
+                <div class="trend-card">
+                    <h4>UPI Spending Trend</h4>
+                    <div class="trend-canvas"><canvas id="trendUpi"></canvas></div>
+                </div>
+                <div class="trend-card">
+                    <h4>Hybrid Score Trend (Quick vs Verified)</h4>
+                    <div class="trend-canvas"><canvas id="trendHybrid"></canvas></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Loan Request Section -->
         <div class="card">
             <h3>Request a Loan</h3>
@@ -567,6 +619,97 @@
         });
     </script>
     {% endif %}
+
+    <script>
+        async function loadFinancialTrends() {
+            try {
+                const res = await fetch("{{ url_for('api_financial_trends') }}");
+                const data = await res.json();
+                if (!data || !data.months) return;
+
+                const months = data.months;
+                const mkLine = (canvasId, label, series, color) => {
+                    const el = document.getElementById(canvasId);
+                    if (!el) return;
+                    const ctx = el.getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: months,
+                            datasets: [{
+                                label,
+                                data: series,
+                                borderColor: color,
+                                backgroundColor: color.replace('1)', '0.12)'),
+                                tension: 0.35,
+                                spanGaps: true,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                };
+
+                mkLine("trendIncome", "Income", data.verified.income, "rgba(34, 197, 94, 1)");
+                mkLine("trendExpense", "Expenses", data.verified.expenses, "rgba(239, 68, 68, 1)");
+                mkLine("trendSavings", "Savings", data.verified.savings, "rgba(3, 95, 223, 1)");
+                mkLine("trendUpi", "UPI Spend", data.verified.upi_spend, "rgba(245, 158, 11, 1)");
+
+                // Hybrid comparison chart (2 datasets)
+                const hybridEl = document.getElementById("trendHybrid");
+                if (hybridEl) {
+                    const ctx = hybridEl.getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: months,
+                            datasets: [
+                                {
+                                    label: 'Verified Hybrid',
+                                    data: data.verified.hybrid,
+                                    borderColor: 'rgba(3, 95, 223, 1)',
+                                    backgroundColor: 'rgba(3, 95, 223, 0.10)',
+                                    tension: 0.35,
+                                    spanGaps: true,
+                                    fill: true
+                                },
+                                {
+                                    label: 'Quick Hybrid',
+                                    data: data.quick.hybrid,
+                                    borderColor: 'rgba(0, 200, 150, 1)',
+                                    backgroundColor: 'rgba(0, 200, 150, 0.08)',
+                                    tension: 0.35,
+                                    spanGaps: true,
+                                    fill: true
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: true, position: 'top' } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load trends", e);
+            }
+        }
+
+        loadFinancialTrends();
+    </script>
 
     <script>
         // Handle mark as read button clicks

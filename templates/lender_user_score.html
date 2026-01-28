@@ -112,6 +112,35 @@
             margin-bottom: 24px;
         }
 
+        .risk-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .risk-green {
+            background: rgba(34, 197, 94, 0.14);
+            color: #166534;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+        }
+
+        .risk-yellow {
+            background: rgba(245, 158, 11, 0.14);
+            color: #92400e;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+
+        .risk-red {
+            background: rgba(239, 68, 68, 0.14);
+            color: #991b1b;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+
         .score-value {
             font-size: 64px;
             font-weight: 700;
@@ -350,6 +379,13 @@
             <div class="score-display">
                 <div class="score-value">{{ "%.0f"|format(verified_score.hybrid_score) }}</div>
                 <p style="color: var(--text-muted); margin-top: 8px;">Last Updated: {{ verified_score.created_at }}</p>
+                {% if risk_tier %}
+                    {% set tier = risk_tier|lower %}
+                    <div class="risk-badge risk-{{ tier }}">
+                        {% if tier == "green" %}🟢{% elif tier == "yellow" %}🟡{% else %}🔴{% endif %}
+                        Risk Tier: {{ risk_tier }} {% if tier == "green" %}(Low Risk){% elif tier == "yellow" %}(Medium Risk){% else %}(High Risk){% endif %}
+                    </div>
+                {% endif %}
             </div>
 
             {% if behavior_json %}
@@ -394,6 +430,40 @@
                 <p><strong>Max EMI Affordability:</strong> ₹{{ "%.0f"|format(loan_decision.max_emi_affordability) }}/month</p>
                 {% endif %}
             </div>
+        </div>
+        {% endif %}
+
+        <!-- Fintech Decision Panel -->
+        {% if affordability or interest_rate %}
+        <div class="card">
+            <h3>Affordability & Pricing (Verified)</h3>
+            {% if affordability and affordability.safe_emi_range %}
+                <div class="grid" style="margin-bottom: 0;">
+                    <div class="info-item">
+                        <label>Safe EMI Range</label>
+                        <strong>₹{{ "%.0f"|format(affordability.safe_emi_range.min) }} – ₹{{ "%.0f"|format(affordability.safe_emi_range.max) }}/mo</strong>
+                    </div>
+                    <div class="info-item">
+                        <label>Recommended Loan Amount</label>
+                        <strong>₹{{ "%.0f"|format(affordability.recommended_loan_amount_range.min) }} – ₹{{ "%.0f"|format(affordability.recommended_loan_amount_range.max) }}</strong>
+                    </div>
+                    <div class="info-item">
+                        <label>Disposable After Max EMI</label>
+                        <strong>₹{{ "%.0f"|format(affordability.disposable_income_after_max_emi) }}/mo</strong>
+                    </div>
+                </div>
+                <p style="color: var(--text-muted); margin-top: 12px; font-size: 13px;">
+                    Loan type: {{ affordability.loan_type|title }} • Tenure: {{ affordability.assumptions.tenure_months }} months
+                </p>
+            {% endif %}
+
+            {% if interest_rate and interest_rate.apr_percent_range %}
+                <div class="info-item" style="margin-top: 12px;">
+                    <label>Recommended APR Range</label>
+                    <strong>{{ "%.1f"|format(interest_rate.apr_percent_range.min) }}% – {{ "%.1f"|format(interest_rate.apr_percent_range.max) }}%</strong>
+                </div>
+                <p style="color: var(--text-muted); margin-top: 10px; font-size: 13px;">{{ interest_rate.notes }}</p>
+            {% endif %}
         </div>
         {% endif %}
 

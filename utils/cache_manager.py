@@ -71,6 +71,10 @@ def check_cache(conn, user_id: str, doc_hash: str) -> Optional[Dict]:
             return {
                 "behavior_json": cached["behavior_json"],
                 "hybrid_score": cached["hybrid_score"],
+                "risk_tier": cached["risk_tier"] if "risk_tier" in cached.keys() else None,
+                "affordability_json": cached["affordability_json"] if "affordability_json" in cached.keys() else None,
+                "interest_rate_json": cached["interest_rate_json"] if "interest_rate_json" in cached.keys() else None,
+                "improvement_plan_json": cached["improvement_plan_json"] if "improvement_plan_json" in cached.keys() else None,
                 "cibil_json": cached["cibil_json"],
                 "bank_json": cached["bank_json"],
                 "upi_json": cached["upi_json"],
@@ -92,7 +96,11 @@ def save_verified_score(
     upi_json: Dict,
     salary_json: Dict,
     behavior_json: Dict,
-    hybrid_score: float
+    hybrid_score: float,
+    risk_tier: Optional[str] = None,
+    affordability_json: Optional[Dict] = None,
+    interest_rate_json: Optional[Dict] = None,
+    improvement_plan_json: Optional[Dict] = None,
 ) -> bool:
     """
     Save verified score to database with caching.
@@ -104,8 +112,9 @@ def save_verified_score(
         import json
         conn.execute(
             """INSERT INTO verified_scores 
-               (user_id, cibil_json, bank_json, upi_json, salary_json, behavior_json, hybrid_score, doc_hash)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (user_id, cibil_json, bank_json, upi_json, salary_json, behavior_json, hybrid_score,
+                risk_tier, affordability_json, interest_rate_json, improvement_plan_json, doc_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 user_id,
                 json.dumps(cibil_json),
@@ -114,6 +123,10 @@ def save_verified_score(
                 json.dumps(salary_json),
                 json.dumps(behavior_json),
                 hybrid_score,
+                risk_tier,
+                json.dumps(affordability_json) if affordability_json is not None else None,
+                json.dumps(interest_rate_json) if interest_rate_json is not None else None,
+                json.dumps(improvement_plan_json) if improvement_plan_json is not None else None,
                 doc_hash
             )
         )

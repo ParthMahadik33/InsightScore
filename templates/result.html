@@ -75,6 +75,35 @@
             margin-bottom: 8px;
         }
 
+        .risk-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .risk-green {
+            background: rgba(34, 197, 94, 0.14);
+            color: #166534;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+        }
+
+        .risk-yellow {
+            background: rgba(245, 158, 11, 0.14);
+            color: #92400e;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+
+        .risk-red {
+            background: rgba(239, 68, 68, 0.14);
+            color: #991b1b;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+
         .score-breakdown {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -348,6 +377,13 @@
         <div class="score-card">
             <div class="score-label">Your Hybrid Score</div>
             <div class="score-main">{{ "%.0f"|format(result.hybrid_score) }}</div>
+            {% if result.score_type == "verified" and result.risk_tier %}
+                {% set tier = result.risk_tier|lower %}
+                <div class="risk-badge risk-{{ tier }}">
+                    {% if tier == "green" %}🟢{% elif tier == "yellow" %}🟡{% else %}🔴{% endif %}
+                    Risk Tier: {{ result.risk_tier }} {% if tier == "green" %}(Low Risk){% elif tier == "yellow" %}(Medium Risk){% else %}(High Risk){% endif %}
+                </div>
+            {% endif %}
             <div class="score-breakdown">
                 <div class="score-item">
                     <div class="score-item-label">CIBIL Score</div>
@@ -359,6 +395,68 @@
                 </div>
             </div>
         </div>
+
+        {% if result.score_type == "verified" %}
+        <div class="card">
+            <div class="card-title">Verified EMI Affordability (Sanction Estimator)</div>
+            {% if result.affordability and result.affordability.safe_emi_range %}
+                <div class="score-breakdown" style="margin-top: 0;">
+                    <div class="score-item">
+                        <div class="score-item-label">Safe EMI Range</div>
+                        <div class="score-item-value">₹{{ "%.0f"|format(result.affordability.safe_emi_range.min) }} – ₹{{ "%.0f"|format(result.affordability.safe_emi_range.max) }}/month</div>
+                    </div>
+                    <div class="score-item">
+                        <div class="score-item-label">Recommended Loan Amount</div>
+                        <div class="score-item-value">₹{{ "%.0f"|format(result.affordability.recommended_loan_amount_range.min) }} – ₹{{ "%.0f"|format(result.affordability.recommended_loan_amount_range.max) }}</div>
+                    </div>
+                    <div class="score-item">
+                        <div class="score-item-label">Disposable Income After Max EMI</div>
+                        <div class="score-item-value">₹{{ "%.0f"|format(result.affordability.disposable_income_after_max_emi) }}/month</div>
+                    </div>
+                </div>
+                <p style="color: var(--text-muted); margin-top: 12px; font-size: 13px;">Loan type used: {{ result.affordability.loan_type|title }} • Tenure assumption: {{ result.affordability.assumptions.tenure_months }} months</p>
+            {% else %}
+                <p style="color: var(--text-muted);">Affordability estimate unavailable for this upload.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-title">Interest Rate Recommendation</div>
+            {% if result.interest_rate and result.interest_rate.apr_percent_range %}
+                <div class="score-breakdown" style="margin-top: 0;">
+                    <div class="score-item">
+                        <div class="score-item-label">Recommended APR Range</div>
+                        <div class="score-item-value">{{ "%.1f"|format(result.interest_rate.apr_percent_range.min) }}% – {{ "%.1f"|format(result.interest_rate.apr_percent_range.max) }}%</div>
+                    </div>
+                    <div class="score-item">
+                        <div class="score-item-label">Loan Type</div>
+                        <div class="score-item-value">{{ result.interest_rate.loan_type|title }}</div>
+                    </div>
+                </div>
+                <p style="color: var(--text-muted); margin-top: 12px; font-size: 13px;">{{ result.interest_rate.notes }}</p>
+            {% else %}
+                <p style="color: var(--text-muted);">Interest rate recommendation unavailable for this upload.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-title">Personalized Improvement Plan (Verified)</div>
+            {% if result.improvement_plan and result.improvement_plan.tips %}
+                {% if result.improvement_plan.weak_areas %}
+                    <p style="color: var(--text-muted); margin-bottom: 10px;">
+                        Focus areas: {{ result.improvement_plan.weak_areas | join(', ') }}
+                    </p>
+                {% endif %}
+                <ul class="tips-list">
+                    {% for tip in result.improvement_plan.tips %}
+                        <li>{{ tip }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p style="color: var(--text-muted);">No improvement plan available for this upload.</p>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <div class="card">
             <div class="card-title">Behavioral Score Breakdown</div>
